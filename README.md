@@ -97,7 +97,7 @@ SQL
 
 ```bash
 # Save complex queries in .sql files
-cip-query --format csv --from "today" < my-analytics-query.sql
+cip-query --format csv < my-analytics-query.sql
 ```
 
 ## API Usage
