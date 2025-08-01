@@ -1,4 +1,4 @@
-import { AvaticaProtobufClient } from '../../avatica-client';
+import { CIPClient } from '../../cip-client';
 import { DateRange, formatDateForSQL } from '../types';
 import { processFrame } from '../../utils';
 
@@ -34,7 +34,7 @@ export interface OcapiRequestRecord {
  * @param batchSize Size of each batch to yield (default: 100)
  */
 export async function* queryOcapiRequests(
-  client: AvaticaProtobufClient,
+  client: CIPClient,
   dateRange?: DateRange,
   batchSize: number = 100
 ): AsyncGenerator<OcapiRequestRecord[], void, unknown> {

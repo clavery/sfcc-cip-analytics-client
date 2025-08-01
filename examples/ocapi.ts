@@ -1,4 +1,4 @@
-import { AvaticaProtobufClient } from "@sfcc-cip-analytics-client/avatica-client";
+import { CIPClient } from "@sfcc-cip-analytics-client/cip-client";
 import {
   queryOcapiRequests,
   OcapiRequestRecord,
@@ -15,7 +15,7 @@ async function main() {
   }
 
   console.log("Creating Avatica client...");
-  const client = new AvaticaProtobufClient(clientId, clientSecret, instance);
+  const client = new CIPClient(clientId, clientSecret, instance);
   console.log("Client created.");
 
   try {

@@ -1,31 +1,38 @@
-// src/avatica-client.ts
+// src/cip-client.ts
 
 import * as protobuf from 'protobufjs';
 import { v4 as uuidv4 } from 'uuid'; // For generating connection IDs
 import { IConnectionProperties, IWireMessage } from './protocol';
 import { NormalizedExecuteResponse, NormalizedFetchResponse } from './normalized-types';
 import * as path from 'path';
+import { Logger, defaultLogger } from './logger';
 
 interface TokenInfo {
   accessToken: string;
   expiresAt: number; // Unix timestamp
 }
 
-export class AvaticaProtobufClient {
+export interface CIPClientOptions {
+  logger?: Logger;
+}
+
+export class CIPClient {
   private readonly clientId: string;
   private readonly clientSecret: string;
   private readonly instance: string;
   private readonly serverUrl: string;
+  private readonly logger: Logger;
   private root: protobuf.Root | null = null;
   private connectionId: string | null = null;
   private tokenInfo: TokenInfo | null = null;
   private sessionId: string | undefined;
 
-  constructor(clientId: string, clientSecret: string, instance: string) {
+  constructor(clientId: string, clientSecret: string, instance: string, options: CIPClientOptions = {}) {
     this.clientId = clientId;
     this.clientSecret = clientSecret;
     this.instance = instance;
     this.serverUrl = `https://jdbc.analytics.commercecloud.salesforce.com/${instance}`;
+    this.logger = options.logger || defaultLogger;
   }
 
   /**
@@ -50,7 +57,7 @@ export class AvaticaProtobufClient {
     
     // Check if we need to get a new token
     if (!this.tokenInfo || now >= this.tokenInfo.expiresAt) {
-      console.debug('Refreshing access token...');
+      this.logger.debug('Refreshing access token...');
       
       const tokenUrl = `https://account.demandware.com/dwsso/oauth2/access_token?scope=SALESFORCE_COMMERCE_API:${this.instance}`;
       
@@ -82,7 +89,7 @@ export class AvaticaProtobufClient {
         expiresAt
       };
       
-      console.debug('Access token refreshed, expires at:', new Date(expiresAt).toISOString());
+      this.logger.debug('Access token refreshed, expires at:', new Date(expiresAt).toISOString());
     }
   }
 
@@ -227,7 +234,7 @@ export class AvaticaProtobufClient {
     const wireMessage = WireMessage.create(wirePayload);
     const serializedWireMessage = WireMessage.encode(wireMessage).finish();
 
-    console.debug(`Sending request: ${requestTypeName}`, {
+    this.logger.debug(`Sending request: ${requestTypeName}`, {
       serverUrl: this.serverUrl,
       instance: this.instance,
       requestPayload: payload,
@@ -250,7 +257,7 @@ export class AvaticaProtobufClient {
     // if the response has an x-session-id header, log it and store in this class
     const sessionId = httpResponse.headers.get('x-session-id');
     if (sessionId) {
-      console.debug(`Session ID: ${sessionId}`);
+      this.logger.debug(`Session ID: ${sessionId}`);
       this.sessionId = sessionId;
     }
 
@@ -277,7 +284,7 @@ export class AvaticaProtobufClient {
 
     const ResponseType = this.root!.lookupType(responseTypeName);
     const decodedResponse = ResponseType.decode((responseWireMessage as any).wrappedMessage);
-    console.debug(`Received response: ${responseTypeName}`, {
+    this.logger.debug(`Received response: ${responseTypeName}`, {
       responseTypeName,
       responseClassName: fullResponseClassName,
       responsePayload: decodedResponse.toJSON(),

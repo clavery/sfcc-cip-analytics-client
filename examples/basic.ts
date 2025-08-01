@@ -1,7 +1,7 @@
 // examples/basic.ts - Basic usage example
 
 import { NormalizedFrame } from '@sfcc-cip-analytics-client';
-import { AvaticaProtobufClient } from '@sfcc-cip-analytics-client/avatica-client';
+import { CIPClient } from '@sfcc-cip-analytics-client/cip-client';
 import { decodeValue, processFrame } from '@sfcc-cip-analytics-client/utils';
 import * as path from 'path';
 
@@ -16,7 +16,7 @@ async function main() {
   }
   
   console.log('Creating Avatica client...');
-  const client = new AvaticaProtobufClient(clientId, clientSecret, instance);
+  const client = new CIPClient(clientId, clientSecret, instance);
   console.log('Client created.');
 
   try {
