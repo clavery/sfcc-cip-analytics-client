@@ -4,6 +4,8 @@ A TypeScript/Node.js client library and CLI tool for querying Salesforce Commerc
 
 See [https://developer.salesforce.com/docs/commerce/b2c-commerce/guide/jdbc_intro.html](https://developer.salesforce.com/docs/commerce/b2c-commerce/guide/jdbc_intro.html) for the details of the JDBC driver used with Java applications as well as the business object and schema reference.
 
+![Screenshot of CLI output](https://raw.githubusercontent.com/clavery/sfcc-cip-analytics-client/main/assets/screenshot.png)
+
 ## Installation
 
 > [!IMPORTANT]  
