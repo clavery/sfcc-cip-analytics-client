@@ -1,5 +1,6 @@
 import { AvaticaProtobufClient } from '../../avatica-client';
-import { DateRange, formatDateForSQL, processFrame } from '../types';
+import { DateRange, formatDateForSQL } from '../types';
+import { processFrame } from '../../utils';
 
 export interface OcapiRequestRecord {
   request_date: Date | string;
@@ -55,6 +56,10 @@ export async function* queryOcapiRequests(
     if (executeResponse.results && executeResponse.results.length > 0) {
       const result = executeResponse.results[0];
       
+      if (!result.firstFrame) {
+        return;
+      }
+      
       // Yield the first frame data
       const firstFrameData = processFrame<OcapiRequestRecord>(result.signature, result.firstFrame);
       if (firstFrameData.length > 0) {
@@ -65,10 +70,15 @@ export async function* queryOcapiRequests(
       let currentFrame = result.firstFrame;
 
       // Fetch and yield additional frames
-      while (!done) {
+      while (!done && currentFrame) {
+        const currentOffset = typeof currentFrame.offset === 'object' && currentFrame.offset && 'toNumber' in currentFrame.offset 
+          ? (currentFrame.offset as any).toNumber() 
+          : Number(currentFrame.offset || 0);
+        const currentRowCount = currentFrame.rows?.length || 0;
+        
         const nextResponse = await client.fetch(
-          result.statementId,
-          currentFrame.offset + currentFrame.rows.length,
+          result.statementId || 0,
+          currentOffset + currentRowCount,
           batchSize
         );
         

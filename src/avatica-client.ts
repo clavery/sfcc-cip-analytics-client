@@ -1,33 +1,88 @@
-// src/client.ts
+// src/avatica-client.ts
 
 import * as protobuf from 'protobufjs';
 import { v4 as uuidv4 } from 'uuid'; // For generating connection IDs
 import { IConnectionProperties, IExecuteResponse, IWireMessage } from './protocol';
+import * as path from 'path';
+
+interface TokenInfo {
+  accessToken: string;
+  expiresAt: number; // Unix timestamp
+}
 
 export class AvaticaProtobufClient {
+  private readonly clientId: string;
+  private readonly clientSecret: string;
+  private readonly instance: string;
   private readonly serverUrl: string;
-  private root: protobuf.Root;
+  private root: protobuf.Root | null = null;
   private connectionId: string | null = null;
-    instance: string;
-    accessToken: string | undefined;
-    sessionId: string | undefined;
+  private tokenInfo: TokenInfo | null = null;
+  private sessionId: string | undefined;
 
-  private constructor(serverUrl: string, instance: string, root: protobuf.Root, accessToken?: string) {
-    this.serverUrl = serverUrl;
-    this.root = root;
+  constructor(clientId: string, clientSecret: string, instance: string) {
+    this.clientId = clientId;
+    this.clientSecret = clientSecret;
     this.instance = instance;
-    this.accessToken = accessToken;
+    this.serverUrl = `https://jdbc.analytics.commercecloud.salesforce.com/${instance}`;
   }
 
   /**
-   * Asynchronously creates and initializes an AvaticaProtobufClient.
-   * @param serverUrl The URL of the Avatica server
-   * @param protoFiles An array of paths to the .proto files.
-   * @returns A promise that resolves to a new AvaticaProtobufClient instance.
+   * Initializes the protobuf schemas. Called automatically on first request.
    */
-  public static async create(serverUrl: string, instance: string, protoFiles: string[], accessToken: string): Promise<AvaticaProtobufClient> {
-    const root = await protobuf.load(protoFiles);
-    return new AvaticaProtobufClient(serverUrl, instance, root, accessToken);
+  private async ensureInitialized(): Promise<void> {
+    if (!this.root) {
+      const protoFiles = [
+        path.join(__dirname, '../proto/common.proto'),
+        path.join(__dirname, '../proto/requests.proto'),
+        path.join(__dirname, '../proto/responses.proto'),
+      ];
+      this.root = await protobuf.load(protoFiles);
+    }
+  }
+
+  /**
+   * Ensures we have a valid access token, refreshing if necessary.
+   */
+  private async ensureValidToken(): Promise<void> {
+    const now = Date.now();
+    
+    // Check if we need to get a new token
+    if (!this.tokenInfo || now >= this.tokenInfo.expiresAt) {
+      console.debug('Refreshing access token...');
+      
+      const tokenUrl = `https://account.demandware.com/dwsso/oauth2/access_token?scope=SALESFORCE_COMMERCE_API:${this.instance}`;
+      
+      const response = await fetch(tokenUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Authorization': `Basic ${Buffer.from(`${this.clientId}:${this.clientSecret}`).toString('base64')}`
+        },
+        body: 'grant_type=client_credentials'
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Failed to get access token: ${response.status} ${response.statusText}`);
+      }
+      
+      const data = await response.json() as any;
+      
+      if (!data.access_token) {
+        throw new Error('No access token in response');
+      }
+      
+      // Calculate expiration time (subtract 60 seconds as buffer)
+      const expiresIn = data.expires_in || 3600; // Default to 1 hour if not provided
+      const expiresAt = now + (expiresIn - 60) * 1000;
+      
+      this.tokenInfo = {
+        accessToken: data.access_token,
+        expiresAt
+      };
+      
+      console.debug('Access token refreshed, expires at:', new Date(expiresAt).toISOString());
+    }
   }
 
   /**
@@ -132,17 +187,21 @@ export class AvaticaProtobufClient {
    * @returns A promise that resolves to the deserialized response payload.
    */
   private async sendRequest(requestTypeName: string, payload: object): Promise<any> {
+    // Ensure we're initialized and have a valid token
+    await this.ensureInitialized();
+    await this.ensureValidToken();
+    
     // 1. Construct the fully-qualified Java class name for the request.
     // This is a convention of the Avatica Protobuf wire format.
     const fullRequestClassName = `org.apache.calcite.avatica.proto.Requests$${requestTypeName}`;
 
     // 2. Serialize the specific request message (e.g., OpenConnectionRequest).
-    const RequestType = this.root.lookupType(requestTypeName);
+    const RequestType = this.root!.lookupType(requestTypeName);
     const requestMessage = RequestType.create(payload);
     const serializedRequest = RequestType.encode(requestMessage).finish();
 
     // 3. Wrap the serialized request in a WireMessage.
-    const WireMessage = this.root.lookupType('WireMessage');
+    const WireMessage = this.root!.lookupType('WireMessage');
     const wirePayload = {
       name: fullRequestClassName,
       wrappedMessage: serializedRequest,
@@ -164,7 +223,7 @@ export class AvaticaProtobufClient {
         'Content-Type': 'application/x-protobuf',
         'X-Client-Version': '2.11.0', // Example client version, adjust as needed
         'InstanceId': this.instance,
-        'Authorization': this.accessToken ? `Bearer ${this.accessToken}` : '',
+        'Authorization': `Bearer ${this.tokenInfo!.accessToken}`,
         'x-session-id': this.sessionId || undefined
       },
       body: serializedWireMessage,
@@ -188,23 +247,23 @@ export class AvaticaProtobufClient {
 
     // 6. Find the corresponding response type and decode the wrapped message.
     // The response class name is derived from the response WireMessage's `name` field.
-    const fullResponseClassName = responseWireMessage.name;
+    const fullResponseClassName = (responseWireMessage as any).name;
     const responseTypeName = fullResponseClassName.split('$').pop()!;
     
     // Handle ErrorResponse specifically
     if (responseTypeName === 'ErrorResponse') {
-        const ErrorResponseType = this.root.lookupType(responseTypeName);
-        const errorDetails = ErrorResponseType.decode(responseWireMessage.wrappedMessage);
+        const ErrorResponseType = this.root!.lookupType(responseTypeName);
+        const errorDetails = ErrorResponseType.decode((responseWireMessage as any).wrappedMessage) as any;
         throw new Error(`Avatica Error: ${errorDetails.errorMessage} (SQLState: ${errorDetails.sqlState}, ErrorCode: ${errorDetails.errorCode})`);
     }
 
-    const ResponseType = this.root.lookupType(responseTypeName);
-    const decodedResponse = ResponseType.decode(responseWireMessage.wrappedMessage);
+    const ResponseType = this.root!.lookupType(responseTypeName);
+    const decodedResponse = ResponseType.decode((responseWireMessage as any).wrappedMessage);
     console.debug(`Received response: ${responseTypeName}`, {
       responseTypeName,
       responseClassName: fullResponseClassName,
       responsePayload: decodedResponse.toJSON(),
-      responseLength: responseWireMessage.wrappedMessage.length,
+      responseLength: (responseWireMessage as any).wrappedMessage.length,
     });
     return decodedResponse;
 

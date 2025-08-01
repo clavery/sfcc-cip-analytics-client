@@ -4,14 +4,14 @@
     "module": "commonjs",
     "lib": ["ES2020"],
     "outDir": "./dist",
-    "rootDir": "./src",
+    "rootDir": ".",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "declaration": true,
-    "declarationMap": true,
-    "sourceMap": true,
+    "declarationMap": false,
+    "sourceMap": false,
     "resolveJsonModule": true,
     "baseUrl": ".",
     "paths": {
@@ -19,6 +19,6 @@
       "@sfcc-cip-analytics-client/*": ["src/*"]
     }
   },
-  "include": ["examples", "src/**/*"],
+  "include": ["src/**/*", "examples/**/*"],
   "exclude": ["node_modules", "dist"]
 }

@@ -1,166 +1,21 @@
 // examples/basic.ts - Basic usage example
 
 import { AvaticaProtobufClient } from '@sfcc-cip-analytics-client/avatica-client';
-import { getAccessToken, getAuthConfig, getAvaticaServerUrl } from '@sfcc-cip-analytics-client/auth';
+import { decodeValue, processFrame } from '@sfcc-cip-analytics-client/utils';
 import * as path from 'path';
-
-// --- Helper Functions to Process Results ---
-
-/**
- * Converts an Avatica TypedValue into a standard JavaScript type.
- * @param typedValue The Avatica TypedValue object.
- * @returns The corresponding JavaScript primitive or object.
- */
-function decodeValue(columnValue: any): any {
-  // Check if this is using the new scalar_value field
-  if (columnValue.scalarValue) {
-    const typedValue = columnValue.scalarValue;
-    
-    if (typedValue.null) {
-      return null;
-    }
-    
-    // Check which field actually has a value based on the type
-    switch (typedValue.type) {
-      case 'BOOLEAN':
-      case 'PRIMITIVE_BOOLEAN':
-        return typedValue.boolValue;
-      case 'STRING':
-        return typedValue.stringValue;
-      case 'BYTE':
-      case 'PRIMITIVE_BYTE':
-      case 'SHORT':
-      case 'PRIMITIVE_SHORT':
-      case 'INTEGER':
-      case 'PRIMITIVE_INT':
-      case 'LONG':
-      case 'PRIMITIVE_LONG':
-      case 'BIG_INTEGER':
-      case 'NUMBER':
-        // numberValue might be a Long object from protobuf
-        if (typedValue.numberValue && typeof typedValue.numberValue === 'object' && typedValue.numberValue.toNumber) {
-          return typedValue.numberValue.toNumber();
-        }
-        return Number(typedValue.numberValue);
-      case 'FLOAT':
-      case 'PRIMITIVE_FLOAT':
-      case 'DOUBLE':
-      case 'PRIMITIVE_DOUBLE':
-      case 'BIG_DECIMAL':
-        return typedValue.doubleValue;
-      case 'BYTE_STRING':
-        return typedValue.bytesValue;
-      case 'ARRAY':
-        return typedValue.arrayValue;
-      default:
-        // Try to find any defined value
-        if (typedValue.stringValue !== undefined && typedValue.stringValue !== '') return typedValue.stringValue;
-        if (typedValue.numberValue !== undefined) {
-          if (typedValue.numberValue && typeof typedValue.numberValue === 'object' && typedValue.numberValue.toNumber) {
-            return typedValue.numberValue.toNumber();
-          }
-          return Number(typedValue.numberValue);
-        }
-        if (typedValue.doubleValue !== undefined) return typedValue.doubleValue;
-        if (typedValue.bytesValue !== undefined) return typedValue.bytesValue;
-        if (typedValue.arrayValue !== undefined) return typedValue.arrayValue;
-        if (typedValue.boolValue !== undefined) return typedValue.boolValue;
-    }
-    
-    return null;
-  }
-  
-  // Fall back to the deprecated value field (which is an array)
-  if (columnValue.value && columnValue.value.length > 0) {
-    const typedValue = columnValue.value[0];
-    
-    if (typedValue.null) {
-      return null;
-    }
-    
-    // Use the same logic as above
-    switch (typedValue.type) {
-      case 'BOOLEAN':
-      case 'PRIMITIVE_BOOLEAN':
-        return typedValue.boolValue;
-      case 'STRING':
-        return typedValue.stringValue;
-      case 'BYTE':
-      case 'PRIMITIVE_BYTE':
-      case 'SHORT':
-      case 'PRIMITIVE_SHORT':
-      case 'INTEGER':
-      case 'PRIMITIVE_INT':
-      case 'LONG':
-      case 'PRIMITIVE_LONG':
-      case 'BIG_INTEGER':
-      case 'NUMBER':
-        if (typedValue.numberValue && typeof typedValue.numberValue === 'object' && typedValue.numberValue.toNumber) {
-          return typedValue.numberValue.toNumber();
-        }
-        return Number(typedValue.numberValue);
-      case 'FLOAT':
-      case 'PRIMITIVE_FLOAT':
-      case 'DOUBLE':
-      case 'PRIMITIVE_DOUBLE':
-      case 'BIG_DECIMAL':
-        return typedValue.doubleValue;
-      case 'BYTE_STRING':
-        return typedValue.bytesValue;
-      case 'ARRAY':
-        return typedValue.arrayValue;
-    }
-  }
-  
-  return null;
-}
-
-/**
- * Processes a result frame into a more usable format (array of objects).
- * @param signature The signature from the execute response, containing column info.
- * @param frame The data frame containing rows of typed values.
- * @returns An array of objects, where each object represents a row.
- */
-function processFrame(signature: any, frame: any): Record<string, any>[] {
-  const columnNames = signature.columns.map((c: any) => c.label);
-  
-  if (!frame || !frame.rows) {
-      return [];
-  }
-
-  return frame.rows.map((row: any) => {
-    const rowObject: Record<string, any> = {};
-    
-    // row.value is an array of ColumnValue objects
-    if (!row.value || !Array.isArray(row.value)) {
-      return rowObject;
-    }
-    
-    const decodedValues = row.value.map((colValue: any) => decodeValue(colValue));
-    columnNames.forEach((name: string, i: number) => {
-      rowObject[name] = decodedValues[i];
-    });
-    return rowObject;
-  });
-}
-
 
 // --- Main Execution Logic ---
 async function main() {
-  console.log('Getting access token...');
+  const clientId = process.env.SFCC_CLIENT_ID;
+  const clientSecret = process.env.SFCC_CLIENT_SECRET;
+  const instance = process.env.SFCC_CIP_INSTANCE;
 
-  const token = await getAccessToken();
-  const config = getAuthConfig();
-  const AVATICA_SERVER_URL = getAvaticaServerUrl();
-  
-  const protoFiles = [
-    path.join(__dirname, '../proto/common.proto'),
-    path.join(__dirname, '../proto/requests.proto'),
-    path.join(__dirname, '../proto/responses.proto'),
-  ];
+  if (!clientId || !clientSecret || !instance) {
+    throw new Error('Required environment variables: SFCC_CLIENT_ID, SFCC_CLIENT_SECRET, SFCC_CIP_INSTANCE');
+  }
   
   console.log('Creating Avatica client...');
-  const client = await AvaticaProtobufClient.create(AVATICA_SERVER_URL, config.instance, protoFiles, token);
+  const client = new AvaticaProtobufClient(clientId, clientSecret, instance);
   console.log('Client created.');
 
   try {
@@ -186,27 +41,43 @@ async function main() {
     console.log('\n3. Processing results...');
     if (executeResponse.results && executeResponse.results.length > 0) {
       const result = executeResponse.results[0];
+      
+      if (!result.firstFrame) {
+        console.log('   No data frame returned.');
+        await client.closeStatement(statementId);
+        return;
+      }
+      
       const data = processFrame(result.signature, result.firstFrame);
       console.log('   Decoded Data:');
       console.table(data);
 
-      var done = result.firstFrame.done;
-      var _result = result.firstFrame;
+      let done = result.firstFrame.done;
+      let currentFrame = result.firstFrame;
+      
       // Example of fetching more data if the result set was large
-      while (!done) {
+      while (!done && currentFrame) {
           console.log('\n   Result set is not complete, fetching next frame...');
+          
+          const currentOffset = typeof currentFrame.offset === 'object' && currentFrame.offset && 'toNumber' in currentFrame.offset 
+            ? (currentFrame.offset as any).toNumber() 
+            : Number(currentFrame.offset || 0);
+          const currentRowCount = currentFrame.rows?.length || 0;
+          
           const nextResponse = await client.fetch(
-              result.statementId, 
-              _result.offset + _result.rows.length,
+              result.statementId || 0, 
+              currentOffset + currentRowCount,
               100 // fetch next 100 rows
           );
-          _result = nextResponse.frame;
-          if (!_result) {
+          
+          currentFrame = nextResponse.frame;
+          if (!currentFrame) {
               console.log('   No more frames available.');
               break;
           }
-          const nextData = processFrame(result.signature, _result);
-          done = _result.done;
+          
+          const nextData = processFrame(result.signature, currentFrame);
+          done = currentFrame.done;
           console.log('   Next Frame Data:');
           console.table(nextData);
       }

@@ -3,8 +3,49 @@
   "version": "0.0.1",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./avatica-client": {
+      "types": "./dist/avatica-client.d.ts",
+      "default": "./dist/avatica-client.js"
+    },
+    "./auth": {
+      "types": "./dist/auth.d.ts",
+      "default": "./dist/auth.js"
+    },
+    "./data": {
+      "types": "./dist/data/index.d.ts",
+      "default": "./dist/data/index.js"
+    },
+    "./data/types": {
+      "types": "./dist/data/types.d.ts",
+      "default": "./dist/data/types.js"
+    },
+    "./data/aggregate": {
+      "types": "./dist/data/aggregate/index.d.ts",
+      "default": "./dist/data/aggregate/index.js"
+    },
+    "./data/aggregate/ocapi": {
+      "types": "./dist/data/aggregate/ocapi.d.ts",
+      "default": "./dist/data/aggregate/ocapi.js"
+    },
+    "./utils": {
+      "types": "./dist/utils.d.ts",
+      "default": "./dist/utils.js"
+    },
+    "./protocol": {
+      "types": "./dist/protocol.d.ts",
+      "default": "./dist/protocol.js"
+    }
+  },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc --project tsconfig.build.json",
+    "lint": "tsc --noEmit --project tsconfig.json",
+    "clean": "rm -rf dist",
+    "prepublishOnly": "bun run clean && bun run build",
     "test": "echo \"Error: no test specified\" && exit 1",
     "example:basic": "bun run examples/basic.ts",
     "example:ocapi": "bun run examples/ocapi.ts"
@@ -12,11 +53,20 @@
   "author": "Charles Lavery <clavery@salesforce.com>",
   "license": "Private",
   "description": "SFCC Commerce Intelligence Platform Analytics Client",
+  "keywords": ["salesforce", "commerce-cloud", "analytics", "avatica", "protobuf", "sfcc"],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/salesforce/sfcc-cip-analytics-client.git"
+  },
+  "files": [
+    "dist/**/*",
+    "proto/**/*",
+    "README.md"
+  ],
   "devDependencies": {
     "@types/node": "^24.1.0",
     "@types/uuid": "^10.0.0",
     "protobufjs-cli": "^1.1.3",
-    "ts-node": "^10.9.2",
     "typescript": "^5.9.2"
   },
   "dependencies": {
