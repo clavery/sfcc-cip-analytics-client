@@ -1,8 +1,8 @@
 // examples/basic.ts - Basic usage example
 
-import { NormalizedFrame } from '@sfcc-cip-analytics-client';
-import { CIPClient } from '@sfcc-cip-analytics-client/cip-client';
-import { decodeValue, processFrame } from '@sfcc-cip-analytics-client/utils';
+import { NormalizedFrame } from 'sfcc-cip-analytics-client';
+import { CIPClient } from 'sfcc-cip-analytics-client/cip-client';
+import { decodeValue, processFrame } from 'sfcc-cip-analytics-client/utils';
 import * as path from 'path';
 
 // --- Main Execution Logic ---

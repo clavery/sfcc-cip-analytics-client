@@ -1,5 +1,4 @@
 
-// Main exports for @sfcc-cip-analytics-client package
 export { CIPClient, CIPClientOptions } from './cip-client';
 export { Logger, DefaultLogger, NoOpLogger, defaultLogger } from './logger';
 export { getAuthConfig, getAccessToken, getAvaticaServerUrl, AuthConfig } from './auth';

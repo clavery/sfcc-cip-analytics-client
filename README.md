@@ -11,7 +11,7 @@ See [https://developer.salesforce.com/docs/commerce/b2c-commerce/guide/jdbc_intr
 
 
 ```bash
-npm install @sfcc-cip-analytics-client
+npm install sfcc-cip-analytics-client
 ```
 
 ### Global CLI Installation
@@ -21,7 +21,7 @@ npm install @sfcc-cip-analytics-client
 
 
 ```bash
-npm install -g @sfcc-cip-analytics-client
+npm install -g sfcc-cip-analytics-client
 # Now you can use: cip-query "SELECT * FROM table"
 ```
 
@@ -94,7 +94,7 @@ cip-query --format csv --from "today" < my-analytics-query.sql
 ### Low Level Client
 
 ```typescript
-import { CIPClient } from '@sfcc-cip-analytics-client';
+import { CIPClient } from 'sfcc-cip-analytics-client';
 
 const client = new CIPClient(
   process.env.SFCC_CLIENT_ID!,
@@ -129,7 +129,7 @@ queryData();
 These return simple arrays of plain old JavaScript objects, making it easy to work with the data.
 
 ```typescript
-import { CIPClient, queryOcapiRequests } from '@sfcc-cip-analytics-client';
+import { CIPClient, queryOcapiRequests } from 'sfcc-cip-analytics-client';
 
 const client = new CIPClient(clientId, clientSecret, instance);
 

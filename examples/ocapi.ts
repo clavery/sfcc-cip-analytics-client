@@ -1,8 +1,8 @@
-import { CIPClient } from "@sfcc-cip-analytics-client/cip-client";
+import { CIPClient } from "sfcc-cip-analytics-client/cip-client";
 import {
   queryOcapiRequests,
   OcapiRequestRecord,
-} from "@sfcc-cip-analytics-client/data/aggregate/ocapi";
+} from "sfcc-cip-analytics-client/data/aggregate/ocapi";
 import * as path from "path";
 
 async function main() {

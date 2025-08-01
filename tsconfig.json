@@ -15,8 +15,8 @@
     "resolveJsonModule": true,
     "baseUrl": ".",
     "paths": {
-      "@sfcc-cip-analytics-client": ["src/index.ts"],
-      "@sfcc-cip-analytics-client/*": ["src/*"]
+      "sfcc-cip-analytics-client": ["src/index.ts"],
+      "sfcc-cip-analytics-client/*": ["src/*"]
     }
   },
   "include": ["src/**/*", "examples/**/*"],
