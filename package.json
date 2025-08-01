@@ -49,10 +49,11 @@
     }
   },
   "scripts": {
+    "preinstall": "npm run build",
     "build": "tsc --project tsconfig.build.json",
     "lint": "tsc --noEmit --project tsconfig.json",
     "clean": "rm -rf dist",
-    "prepublishOnly": "bun run clean && bun run build",
+    "prepublishOnly": "npm run clean && npm run build",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "Charles Lavery <clavery@salesforce.com>",
