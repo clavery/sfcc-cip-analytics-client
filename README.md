@@ -208,6 +208,8 @@ new CIPClient(clientId: string, clientSecret: string, instance: string, options?
 
 ## Todo
 
+- [ ] packaging; release artifacts
+- [ ] CI/CD actions
 - [ ] Implement more business object helpers for primary documented use cases
 
 
