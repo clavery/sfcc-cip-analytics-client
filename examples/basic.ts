@@ -1,5 +1,6 @@
 // examples/basic.ts - Basic usage example
 
+import { NormalizedFrame } from '@sfcc-cip-analytics-client';
 import { AvaticaProtobufClient } from '@sfcc-cip-analytics-client/avatica-client';
 import { decodeValue, processFrame } from '@sfcc-cip-analytics-client/utils';
 import * as path from 'path';
@@ -53,15 +54,13 @@ async function main() {
       console.table(data);
 
       let done = result.firstFrame.done;
-      let currentFrame = result.firstFrame;
+      let currentFrame : NormalizedFrame|undefined = result.firstFrame;
       
       // Example of fetching more data if the result set was large
       while (!done && currentFrame) {
           console.log('\n   Result set is not complete, fetching next frame...');
           
-          const currentOffset = typeof currentFrame.offset === 'object' && currentFrame.offset && 'toNumber' in currentFrame.offset 
-            ? (currentFrame.offset as any).toNumber() 
-            : Number(currentFrame.offset || 0);
+          const currentOffset = currentFrame.offset || 0;
           const currentRowCount = currentFrame.rows?.length || 0;
           
           const nextResponse = await client.fetch(

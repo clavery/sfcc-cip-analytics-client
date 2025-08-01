@@ -67,13 +67,11 @@ export async function* queryOcapiRequests(
       }
 
       let done = result.firstFrame.done;
-      let currentFrame = result.firstFrame;
+      let currentFrame: typeof result.firstFrame | undefined = result.firstFrame;
 
       // Fetch and yield additional frames
       while (!done && currentFrame) {
-        const currentOffset = typeof currentFrame.offset === 'object' && currentFrame.offset && 'toNumber' in currentFrame.offset 
-          ? (currentFrame.offset as any).toNumber() 
-          : Number(currentFrame.offset || 0);
+        const currentOffset = currentFrame.offset || 0;
         const currentRowCount = currentFrame.rows?.length || 0;
         
         const nextResponse = await client.fetch(

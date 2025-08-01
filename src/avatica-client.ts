@@ -2,7 +2,8 @@
 
 import * as protobuf from 'protobufjs';
 import { v4 as uuidv4 } from 'uuid'; // For generating connection IDs
-import { IConnectionProperties, IExecuteResponse, IWireMessage } from './protocol';
+import { IConnectionProperties, IWireMessage } from './protocol';
+import { NormalizedExecuteResponse, NormalizedFetchResponse } from './normalized-types';
 import * as path from 'path';
 
 interface TokenInfo {
@@ -143,9 +144,9 @@ export class AvaticaProtobufClient {
    * @param statementId The ID of the statement.
    * @param sql The SQL query to execute.
    * @param maxRowCount The maximum number of rows to return in the first frame (-1 for all).
-   * @returns The full execution response, including the first frame of results.
+   * @returns The full execution response, including the first frame of results with normalized offset values.
    */
-  public async execute(statementId: number, sql: string, maxRowCount: number = -1): Promise<IExecuteResponse> {
+  public async execute(statementId: number, sql: string, maxRowCount: number = -1): Promise<NormalizedExecuteResponse> {
     if (!this.connectionId) {
       throw new Error('No connection available. Call openConnection() first.');
     }
@@ -157,7 +158,17 @@ export class AvaticaProtobufClient {
     };
     // The actual request type is PrepareAndExecuteRequest
     const response = await this.sendRequest('PrepareAndExecuteRequest', requestPayload);
-    return response as IExecuteResponse;
+    
+    // Normalize frame data in all results
+    if (response.results) {
+      response.results.forEach((result: any) => {
+        if (result.firstFrame) {
+          result.firstFrame = this.normalizeFrame(result.firstFrame);
+        }
+      });
+    }
+    
+    return response as NormalizedExecuteResponse;
   }
 
   /**
@@ -165,9 +176,9 @@ export class AvaticaProtobufClient {
    * @param statementId The statement ID.
    * @param offset The starting row offset for the new frame.
    * @param fetchMaxRowCount The maximum number of rows for this frame.
-   * @returns The fetch response containing the next frame.
+   * @returns The fetch response containing the next frame with normalized offset values.
    */
-  public async fetch(statementId: number, offset: number, fetchMaxRowCount: number) {
+  public async fetch(statementId: number, offset: number, fetchMaxRowCount: number): Promise<NormalizedFetchResponse> {
       if (!this.connectionId) {
         throw new Error('No connection available. Call openConnection() first.');
       }
@@ -177,7 +188,14 @@ export class AvaticaProtobufClient {
           offset,
           fetchMaxRowCount
       };
-      return await this.sendRequest('FetchRequest', requestPayload);
+      const response = await this.sendRequest('FetchRequest', requestPayload);
+      
+      // Normalize the frame data
+      if (response.frame) {
+        response.frame = this.normalizeFrame(response.frame);
+      }
+      
+      return response;
   }
 
   /**
@@ -266,6 +284,32 @@ export class AvaticaProtobufClient {
       responseLength: (responseWireMessage as any).wrappedMessage.length,
     });
     return decodedResponse;
+  }
 
+  /**
+   * Normalizes protobuf Long values to JavaScript numbers.
+   * @param value The value that might be a protobuf Long
+   * @returns A JavaScript number
+   */
+  private normalizeLongValue(value: any): number {
+    if (value && typeof value === 'object' && 'toNumber' in value) {
+      return (value as any).toNumber();
+    }
+    return Number(value || 0);
+  }
+
+  /**
+   * Normalizes frame data to ensure offset and other numeric fields are plain numbers.
+   * @param frame The frame object to normalize
+   * @returns The frame with normalized numeric values
+   */
+  private normalizeFrame(frame: any): any {
+    if (!frame) return frame;
+    
+    return {
+      ...frame,
+      offset: this.normalizeLongValue(frame.offset),
+      rows: frame.rows || []
+    };
   }
 }

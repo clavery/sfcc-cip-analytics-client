@@ -36,6 +36,10 @@
       "types": "./dist/utils.d.ts",
       "default": "./dist/utils.js"
     },
+    "./normalized-types": {
+      "types": "./dist/normalized-types.d.ts",
+      "default": "./dist/normalized-types.js"
+    },
     "./protocol": {
       "types": "./dist/protocol.d.ts",
       "default": "./dist/protocol.js"
