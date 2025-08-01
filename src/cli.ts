@@ -11,52 +11,15 @@ interface ParsedDate {
   formatted: string;
 }
 
-function parseHumanDate(input: string): ParsedDate {
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+function parseDate(input: string): ParsedDate {
+  const timestamp = Date.parse(input);
   
-  // Handle relative dates
-  const lowerInput = input.toLowerCase().trim();
-  
-  if (lowerInput === 'today') {
-    return { date: today, formatted: formatDateForSQL(today) };
+  if (isNaN(timestamp)) {
+    throw new Error(`Unable to parse date: "${input}". Use standard date formats like "2024-01-15", "Jan 15, 2024", "2024-01-15T00:00:00"`);
   }
   
-  if (lowerInput === 'yesterday') {
-    const yesterday = new Date(today);
-    yesterday.setDate(yesterday.getDate() - 1);
-    return { date: yesterday, formatted: formatDateForSQL(yesterday) };
-  }
-  
-  // Handle "N days ago"
-  const daysAgoMatch = lowerInput.match(/^(\d+)\s*days?\s*ago$/);
-  if (daysAgoMatch) {
-    const daysAgo = parseInt(daysAgoMatch[1]);
-    const date = new Date(today);
-    date.setDate(date.getDate() - daysAgo);
-    return { date, formatted: formatDateForSQL(date) };
-  }
-  
-  // Handle "last week", "last month"
-  if (lowerInput === 'last week') {
-    const date = new Date(today);
-    date.setDate(date.getDate() - 7);
-    return { date, formatted: formatDateForSQL(date) };
-  }
-  
-  if (lowerInput === 'last month') {
-    const date = new Date(today);
-    date.setMonth(date.getMonth() - 1);
-    return { date, formatted: formatDateForSQL(date) };
-  }
-  
-  // Try to parse as a regular date
-  const parsed = new Date(input);
-  if (isNaN(parsed.getTime())) {
-    throw new Error(`Unable to parse date: "${input}". Try formats like "2024-01-15", "today", "yesterday", "3 days ago", "last week"`);
-  }
-  
-  return { date: parsed, formatted: formatDateForSQL(parsed) };
+  const date = new Date(timestamp);
+  return { date, formatted: formatDateForSQL(date) };
 }
 
 
@@ -147,8 +110,8 @@ Arguments:
   sql                SQL query to execute (required, or read from stdin)
 
 Options:
-  --from <date>      From date for <FROM> placeholder (e.g., "2024-01-01", "today", "yesterday", "3 days ago")
-  --to <date>        To date for <TO> placeholder (e.g., "2024-01-31", "today", "last week")
+  --from <date>      From date for <FROM> placeholder (e.g., "2024-01-01", "Jan 1, 2024", "2024-01-01T00:00:00")
+  --to <date>        To date for <TO> placeholder (e.g., "2024-01-31", "Jan 31, 2024", "2024-01-31T23:59:59")
   --format <type>    Output format: table (default), json, csv
   --help             Show this help message
 
@@ -163,7 +126,7 @@ Examples:
   cip-query "SELECT * FROM ccdw_aggr_ocapi_request LIMIT 10"
   
   # From stdin with heredoc
-  cip-query --format json --from "yesterday" --to "today" <<SQL
+  cip-query --format json --from "2024-01-01" --to "2024-01-02" <<SQL
     SELECT * FROM ccdw_aggr_ocapi_request 
     WHERE request_date >= <FROM> AND request_date <= <TO>
   SQL
@@ -224,13 +187,13 @@ async function main(): Promise<void> {
     let toDate: string | undefined;
     
     if (values.from) {
-      const parsed = parseHumanDate(values.from);
+      const parsed = parseDate(values.from);
       fromDate = parsed.formatted;
       console.info(`Using from date: ${parsed.formatted} (parsed from "${values.from}")`);
     }
     
     if (values.to) {
-      const parsed = parseHumanDate(values.to);
+      const parsed = parseDate(values.to);
       toDate = parsed.formatted;
       console.info(`Using to date: ${parsed.formatted} (parsed from "${values.to}")`);
     }

@@ -53,17 +53,22 @@
     "lint": "tsc --noEmit --project tsconfig.json",
     "clean": "rm -rf dist",
     "prepublishOnly": "bun run clean && bun run build",
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "example:basic": "bun run examples/basic.ts",
-    "example:ocapi": "bun run examples/ocapi.ts"
+    "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "Charles Lavery <clavery@salesforce.com>",
   "license": "Private",
   "description": "SFCC Commerce Intelligence Platform Analytics Client",
-  "keywords": ["salesforce", "commerce-cloud", "analytics", "avatica", "protobuf", "sfcc"],
+  "keywords": [
+    "salesforce",
+    "commerce-cloud",
+    "analytics",
+    "avatica",
+    "protobuf",
+    "sfcc"
+  ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/salesforce/sfcc-cip-analytics-client.git"
+    "url": "https://github.com/clavery/sfcc-cip-analytics-client.git"
   },
   "files": [
     "dist/**/*",

@@ -11,7 +11,9 @@ async function main() {
   const instance = process.env.SFCC_CIP_INSTANCE;
 
   if (!clientId || !clientSecret || !instance) {
-    throw new Error('Required environment variables: SFCC_CLIENT_ID, SFCC_CLIENT_SECRET, SFCC_CIP_INSTANCE');
+    throw new Error(
+      "Required environment variables: SFCC_CLIENT_ID, SFCC_CLIENT_SECRET, SFCC_CIP_INSTANCE",
+    );
   }
 
   console.log("Creating Avatica client...");
@@ -24,12 +26,6 @@ async function main() {
     await client.openConnection({});
     console.log("Connection opened");
 
-    // Example 1: Query all OCAPI requests using async generator
-    console.log("\nExample 1: Querying all OCAPI requests (streaming)...");
-    let totalCount = 0;
-    let batchCount = 0;
-
-    // Example 3: Query OCAPI requests for a specific date and collect all results
     const specificDate = new Date("2024-05-01");
     console.log(
       `\nExample 3: Collecting all OCAPI requests for ${specificDate.toISOString().split("T")[0]}...`,
@@ -37,15 +33,18 @@ async function main() {
 
     const allResults: OcapiRequestRecord[] = [];
 
-    for await (const batch of queryOcapiRequests(
+    const query = queryOcapiRequests(
       client,
       { startDate: specificDate, endDate: specificDate },
       50,
-    )) {
+    );
+
+    for await (const batch of query) {
       allResults.push(...batch);
       console.log(
         `  Collected ${batch.length} records (total: ${allResults.length})`,
       );
+      console.table(batch);
     }
 
     console.log(
