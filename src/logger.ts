@@ -1,3 +1,5 @@
+import { styleText } from 'util';
+
 export interface Logger {
   debug(message: string, ...args: any[]): void;
   info(message: string, ...args: any[]): void;
@@ -27,7 +29,7 @@ export class DefaultLogger implements Logger {
   }
 
   error(message: string, ...args: any[]): void {
-    console.error(message, ...args);
+    console.error(styleText('red', message), ...args);
   }
 }
 
