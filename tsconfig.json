@@ -12,8 +12,13 @@
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
-    "resolveJsonModule": true
+    "resolveJsonModule": true,
+    "baseUrl": ".",
+    "paths": {
+      "@sfcc-cip-analytics-client": ["src/index.ts"],
+      "@sfcc-cip-analytics-client/*": ["src/*"]
+    }
   },
-  "include": ["src/**/*"],
+  "include": ["examples", "src/**/*"],
   "exclude": ["node_modules", "dist"]
 }

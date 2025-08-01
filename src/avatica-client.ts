@@ -7,9 +7,10 @@ import { IConnectionProperties, IExecuteResponse, IWireMessage } from './protoco
 export class AvaticaProtobufClient {
   private readonly serverUrl: string;
   private root: protobuf.Root;
+  private connectionId: string | null = null;
     instance: string;
     accessToken: string | undefined;
-    sessionId: string;
+    sessionId: string | undefined;
 
   private constructor(serverUrl: string, instance: string, root: protobuf.Root, accessToken?: string) {
     this.serverUrl = serverUrl;
@@ -32,9 +33,11 @@ export class AvaticaProtobufClient {
   /**
    * Opens a new connection to the Avatica server.
    * @param info Connection properties (e.g., user, password, schema).
-   * @returns The server-validated connection ID.
    */
-  public async openConnection(info: IConnectionProperties = {}): Promise<string> {
+  public async openConnection(info: IConnectionProperties = {}): Promise<void> {
+    if (this.connectionId) {
+      throw new Error('Connection already open. Close the existing connection first.');
+    }
 
     const connectionId = uuidv4(); // Use provided ID or generate a new one
     const requestPayload = {
@@ -43,46 +46,56 @@ export class AvaticaProtobufClient {
     };
     const response = await this.sendRequest('OpenConnectionRequest', requestPayload);
     // The server returns its own connectionId in the response, which we should use.
-    return response.connectionId || connectionId;
+    this.connectionId = response.connectionId || connectionId;
   }
 
   /**
-   * Closes an existing connection.
-   * @param connectionId The ID of the connection to close.
+   * Closes the existing connection.
    */
-  public async closeConnection(connectionId: string): Promise<void> {
-    await this.sendRequest('CloseConnectionRequest', { connectionId });
+  public async closeConnection(): Promise<void> {
+    if (!this.connectionId) {
+      throw new Error('No connection to close.');
+    }
+    await this.sendRequest('CloseConnectionRequest', { connectionId: this.connectionId });
+    this.connectionId = null;
   }
 
   /**
-   * Creates a new statement for a given connection.
-   * @param connectionId The ID of the connection.
+   * Creates a new statement for the current connection.
    * @returns The ID of the newly created statement.
    */
-  public async createStatement(connectionId: string): Promise<number> {
-    const response = await this.sendRequest('CreateStatementRequest', { connectionId });
+  public async createStatement(): Promise<number> {
+    if (!this.connectionId) {
+      throw new Error('No connection available. Call openConnection() first.');
+    }
+    const response = await this.sendRequest('CreateStatementRequest', { connectionId: this.connectionId });
     return response.statementId;
   }
 
   /**
    * Closes an existing statement.
-   * @param connectionId The ID of the connection.
    * @param statementId The ID of the statement to close.
    */
-  public async closeStatement(connectionId: string, statementId: number): Promise<void> {
-    await this.sendRequest('CloseStatementRequest', { connectionId, statementId });
+  public async closeStatement(statementId: number): Promise<void> {
+    if (!this.connectionId) {
+      throw new Error('No connection available. Call openConnection() first.');
+    }
+    await this.sendRequest('CloseStatementRequest', { connectionId: this.connectionId, statementId });
   }
 
   /**
    * Prepares and executes a SQL query in a single step.
-   * @param connectionId The ID of the connection.
+   * @param statementId The ID of the statement.
    * @param sql The SQL query to execute.
    * @param maxRowCount The maximum number of rows to return in the first frame (-1 for all).
    * @returns The full execution response, including the first frame of results.
    */
-  public async execute(connectionId: string, statementId: number, sql: string, maxRowCount: number = -1): Promise<IExecuteResponse> {
+  public async execute(statementId: number, sql: string, maxRowCount: number = -1): Promise<IExecuteResponse> {
+    if (!this.connectionId) {
+      throw new Error('No connection available. Call openConnection() first.');
+    }
     const requestPayload = {
-      connectionId,
+      connectionId: this.connectionId,
       statementId,
       sql,
       maxRowCount,
@@ -94,15 +107,17 @@ export class AvaticaProtobufClient {
 
   /**
    * Fetches the next frame of results for a query.
-   * @param connectionId The connection ID.
    * @param statementId The statement ID.
    * @param offset The starting row offset for the new frame.
    * @param fetchMaxRowCount The maximum number of rows for this frame.
    * @returns The fetch response containing the next frame.
    */
-  public async fetch(connectionId: string, statementId: number, offset: number, fetchMaxRowCount: number) {
+  public async fetch(statementId: number, offset: number, fetchMaxRowCount: number) {
+      if (!this.connectionId) {
+        throw new Error('No connection available. Call openConnection() first.');
+      }
       const requestPayload = {
-          connectionId,
+          connectionId: this.connectionId,
           statementId,
           offset,
           fetchMaxRowCount

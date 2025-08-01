@@ -1,6 +1,6 @@
-import { AvaticaProtobufClient } from './avatica-client';
-import { queryOcapiRequests, OcapiRequestRecord } from './data/aggregate/ocapi';
-import { getAccessToken, getAuthConfig, getAvaticaServerUrl } from './auth';
+import { AvaticaProtobufClient } from '@sfcc-cip-analytics-client/avatica-client';
+import { queryOcapiRequests, OcapiRequestRecord } from '@sfcc-cip-analytics-client/data/aggregate/ocapi';
+import { getAccessToken, getAuthConfig, getAvaticaServerUrl } from '@sfcc-cip-analytics-client/auth';
 import * as path from 'path';
 
 async function main() {
@@ -20,13 +20,11 @@ async function main() {
   const client = await AvaticaProtobufClient.create(AVATICA_SERVER_URL, config.instance, protoFiles, token);
   console.log('Client created.');
 
-  let connectionId: string | null = null;
-  
   try {
     // Open connection
     console.log('\nOpening connection...');
-    connectionId = await client.openConnection({});
-    console.log(`Connection opened with ID: ${connectionId}`);
+    await client.openConnection({});
+    console.log('Connection opened');
 
     // Example 1: Query all OCAPI requests using async generator
     console.log('\nExample 1: Querying all OCAPI requests (streaming)...');
@@ -41,7 +39,6 @@ async function main() {
     
     for await (const batch of queryOcapiRequests(
       client,
-      connectionId,
       { startDate: specificDate, endDate: specificDate },
       50
     )) {
@@ -65,11 +62,9 @@ async function main() {
     console.error('Error querying data:', error);
   } finally {
     // Always close the connection when done
-    if (connectionId) {
-      console.log('\nClosing connection...');
-      await client.closeConnection(connectionId);
-      console.log('Connection closed.');
-    }
+    console.log('\nClosing connection...');
+    await client.closeConnection();
+    console.log('Connection closed.');
   }
 }
 

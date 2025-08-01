@@ -1,7 +1,7 @@
-// src/example.ts
+// examples/basic.ts - Basic usage example
 
-import { AvaticaProtobufClient } from './avatica-client';
-import { getAccessToken, getAuthConfig, getAvaticaServerUrl } from './auth';
+import { AvaticaProtobufClient } from '@sfcc-cip-analytics-client/avatica-client';
+import { getAccessToken, getAuthConfig, getAvaticaServerUrl } from '@sfcc-cip-analytics-client/auth';
 import * as path from 'path';
 
 // --- Helper Functions to Process Results ---
@@ -163,26 +163,23 @@ async function main() {
   const client = await AvaticaProtobufClient.create(AVATICA_SERVER_URL, config.instance, protoFiles, token);
   console.log('Client created.');
 
-  let connectionId: string | null = null;
-  
   try {
     // 1. Open Connection
     console.log('\n1. Opening connection...');
     // Add credentials if your server requires them
-    connectionId = await client.openConnection({
-    });
-    console.log(`   Connection opened with ID: ${connectionId}`);
+    await client.openConnection({});
+    console.log('   Connection opened');
 
     // Create a statement first
     console.log('Creating a statement...');
-    const statementId = await client.createStatement(connectionId)
+    const statementId = await client.createStatement();
     console.log(`   Statement created with ID: ${statementId}`);
     // 2. Execute a Query
     console.log('\n2. Executing a query...');
     // const sql = "SELECT customer_id, login, email_address FROM ccdw_dim_customer"; 
     //const sql = "SELECT * FROM ccdw_dim_user_agent"; 
     const sql = "SELECT * FROM ccdw_aggr_ocapi_request"; 
-    const executeResponse = await client.execute(connectionId, statementId, sql);
+    const executeResponse = await client.execute(statementId, sql);
     console.log('   Query executed.');
 
     // 3. Process Results
@@ -199,7 +196,6 @@ async function main() {
       while (!done) {
           console.log('\n   Result set is not complete, fetching next frame...');
           const nextResponse = await client.fetch(
-              connectionId, 
               result.statementId, 
               _result.offset + _result.rows.length,
               100 // fetch next 100 rows
@@ -215,7 +211,7 @@ async function main() {
           console.table(nextData);
       }
 
-      await client.closeStatement(connectionId, statementId);
+      await client.closeStatement(statementId);
     } else {
       console.log('   Query executed, but no result sets were returned.');
     }
@@ -225,11 +221,9 @@ async function main() {
     console.error(error);
   } finally {
     // 5. Close Connection
-    if (connectionId) {
-      console.log('\n5. Closing connection...');
-      await client.closeConnection(connectionId);
-      console.log('   Connection closed.');
-    }
+    console.log('\n5. Closing connection...');
+    await client.closeConnection();
+    console.log('   Connection closed.');
   }
 }
 

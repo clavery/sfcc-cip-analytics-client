@@ -28,18 +28,16 @@ export interface OcapiRequestRecord {
 /**
  * Query the ccdw_aggr_ocapi_request table with optional date filtering
  * Yields batches of records as they are fetched from the server
- * @param client The Avatica client instance
- * @param connectionId The connection ID
+ * @param client The Avatica client instance (must have an open connection)
  * @param dateRange Optional date range to filter results by request_date
  * @param batchSize Size of each batch to yield (default: 100)
  */
 export async function* queryOcapiRequests(
   client: AvaticaProtobufClient,
-  connectionId: string,
   dateRange?: DateRange,
   batchSize: number = 100
 ): AsyncGenerator<OcapiRequestRecord[], void, unknown> {
-  const statementId = await client.createStatement(connectionId);
+  const statementId = await client.createStatement();
 
   try {
     let sql = 'SELECT * FROM ccdw_aggr_ocapi_request';
@@ -52,7 +50,7 @@ export async function* queryOcapiRequests(
       sql += ` WHERE request_date >= '${startDateStr}' AND request_date <= '${endDateStr}'`;
     }
 
-    const executeResponse = await client.execute(connectionId, statementId, sql, batchSize);
+    const executeResponse = await client.execute(statementId, sql, batchSize);
     
     if (executeResponse.results && executeResponse.results.length > 0) {
       const result = executeResponse.results[0];
@@ -69,7 +67,6 @@ export async function* queryOcapiRequests(
       // Fetch and yield additional frames
       while (!done) {
         const nextResponse = await client.fetch(
-          connectionId,
           result.statementId,
           currentFrame.offset + currentFrame.rows.length,
           batchSize
@@ -87,6 +84,6 @@ export async function* queryOcapiRequests(
       }
     }
   } finally {
-    await client.closeStatement(connectionId, statementId);
+    await client.closeStatement(statementId);
   }
 }
