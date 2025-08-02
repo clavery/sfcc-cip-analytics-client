@@ -19,6 +19,6 @@
       "sfcc-cip-analytics-client/*": ["src/*"]
     }
   },
-  "include": ["src/**/*", "examples/**/*"],
+  "include": ["src/**/*", "examples/**/*", "tests/**/*"],
   "exclude": ["node_modules", "dist"]
 }

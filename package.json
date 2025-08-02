@@ -54,7 +54,12 @@
     "lint": "tsc --noEmit --project tsconfig.json",
     "clean": "rm -rf dist",
     "prepublishOnly": "npm run clean && npm run build",
-    "test": "npm run lint"
+    "test": "npm run lint",
+    "test:integration": "npx tsx tests/integration/run-all.ts",
+    "test:integration:customer": "npx tsx tests/integration/customer-analytics.test.ts",
+    "test:integration:product": "npx tsx tests/integration/product-analytics.test.ts",
+    "test:integration:promotion": "npx tsx tests/integration/promotion-analytics.test.ts",
+    "test:integration:recommendation": "npx tsx tests/integration/recommendation-analytics.test.ts"
   },
   "author": "Charles Lavery <clavery@salesforce.com>",
   "license": "Private",
@@ -80,6 +85,7 @@
     "@types/node": "^24.1.0",
     "@types/uuid": "^10.0.0",
     "protobufjs-cli": "^1.1.3",
+    "tsx": "^4.19.1",
     "typescript": "^5.9.2"
   },
   "dependencies": {
