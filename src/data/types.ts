@@ -14,3 +14,14 @@ export function formatDateForSQL(date: Date): string {
   const day = String(date.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
 }
+
+/**
+ * Clean SQL string by removing extra whitespace and newlines for database compatibility
+ * @param sql The SQL string to clean
+ * @returns Cleaned SQL string with normalized whitespace
+ */
+export function cleanSQL(sql: string): string {
+  return sql
+    .replace(/\s+/g, ' ')  // Replace multiple whitespace/newlines with single space
+    .trim();               // Remove leading/trailing whitespace
+}

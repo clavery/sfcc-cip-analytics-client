@@ -161,6 +161,7 @@ export class CIPClient {
       statementId,
       sql,
       maxRowCount,
+      firstFrameMaxSize: maxRowCount,
     };
     // The actual request type is PrepareAndExecuteRequest
     const response = await this.sendRequest('PrepareAndExecuteRequest', requestPayload);
