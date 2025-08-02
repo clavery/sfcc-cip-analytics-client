@@ -221,8 +221,11 @@ new CIPClient(clientId: string, clientSecret: string, instance: string, options?
 
 ## Todo
 
+- [ ] static build of protobuf for web use
+- [ ] prepared statements for business use cases
 - [ ] packaging; release artifacts
 - [ ] CI/CD actions
+- [ ] testing
 - [ ] Implement more business object helpers for primary documented use cases
 
 

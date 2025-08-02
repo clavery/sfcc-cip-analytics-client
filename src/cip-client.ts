@@ -1,7 +1,5 @@
-// src/cip-client.ts
-
 import * as protobuf from 'protobufjs';
-import { v4 as uuidv4 } from 'uuid'; // For generating connection IDs
+import { v4 as uuidv4 } from 'uuid';
 import { IConnectionProperties, IWireMessage } from './protocol';
 import { NormalizedExecuteResponse, NormalizedFetchResponse } from './normalized-types';
 import * as path from 'path';
@@ -40,6 +38,7 @@ export class CIPClient {
    */
   private async ensureInitialized(): Promise<void> {
     if (!this.root) {
+      // TODO: use static build
       const protoFiles = [
         path.join(__dirname, '../proto/common.proto'),
         path.join(__dirname, '../proto/requests.proto'),
@@ -246,7 +245,7 @@ export class CIPClient {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-protobuf',
-        'X-Client-Version': '2.11.0', // Example client version, adjust as needed
+        'X-Client-Version': '2.11.0',
         'InstanceId': this.instance,
         'Authorization': `Bearer ${this.tokenInfo!.accessToken}`,
         'x-session-id': this.sessionId || undefined
