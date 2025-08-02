@@ -5,11 +5,86 @@ import { CIPClient } from './cip-client';
 import { processFrame } from './utils';
 import { NormalizedFrame } from './normalized-types';
 import { formatDateForSQL } from './data/types';
-import { getQueryByName, listQueries, getQueriesByCategory } from './data/query-registry';
+import { queryCustomerRegistrationTrends, queryTotalCustomerGrowth, queryRegistration } from './data/aggregate/customer_registration_analytics';
+import { EnhancedQueryFunction, QueryMetadata } from './data/helpers';
+import { DateRange } from './data/types';
 
 interface ParsedDate {
   date: Date;
   formatted: string;
+}
+
+// Registry of available enhanced query functions
+const availableQueries: EnhancedQueryFunction[] = [
+  queryCustomerRegistrationTrends,
+  queryTotalCustomerGrowth,
+  queryRegistration
+];
+
+interface QueryDefinition {
+  name: string;
+  description: string;
+  category: string;
+  requiredParams: string[];
+  optionalParams?: string[];
+  execute: (client: CIPClient, params: any) => AsyncGenerator<any[], void, unknown>;
+}
+
+function getQueryByName(name: string): QueryDefinition | undefined {
+  const queryFn = availableQueries.find(q => q.metadata.name === name);
+  if (!queryFn) return undefined;
+
+  return {
+    name: queryFn.metadata.name,
+    description: queryFn.metadata.description,
+    category: queryFn.metadata.category,
+    requiredParams: queryFn.metadata.requiredParams,
+    optionalParams: queryFn.metadata.optionalParams,
+    execute: (client: CIPClient, params: any) => {
+      // Convert generic params to specific function parameters
+      const dateRange: DateRange | undefined = params.from && params.to ? {
+        startDate: new Date(params.from),
+        endDate: new Date(params.to)
+      } : undefined;
+
+      if (queryFn.metadata.name === 'customer-registration-trends') {
+        return queryCustomerRegistrationTrends(client, params.siteId, dateRange!, 100);
+      } else if (queryFn.metadata.name === 'customer-growth') {
+        return queryTotalCustomerGrowth(client, params.siteId, dateRange!, 100);
+      } else if (queryFn.metadata.name === 'customer-registrations-raw') {
+        const filters = {
+          siteId: params.siteId,
+          deviceClassCode: params.deviceClassCode
+        };
+        return queryRegistration(client, dateRange, filters, 100);
+      } else {
+        throw new Error(`Unknown query: ${queryFn.metadata.name}`);
+      }
+    }
+  };
+}
+
+function listQueries(): QueryDefinition[] {
+  return availableQueries.map(queryFn => ({
+    name: queryFn.metadata.name,
+    description: queryFn.metadata.description,
+    category: queryFn.metadata.category,
+    requiredParams: queryFn.metadata.requiredParams,
+    optionalParams: queryFn.metadata.optionalParams,
+    execute: getQueryByName(queryFn.metadata.name)!.execute
+  }));
+}
+
+function getQueriesByCategory(): Map<string, QueryDefinition[]> {
+  const byCategory = new Map<string, QueryDefinition[]>();
+  
+  for (const queryDef of listQueries()) {
+    const categoryQueries = byCategory.get(queryDef.category) || [];
+    categoryQueries.push(queryDef);
+    byCategory.set(queryDef.category, categoryQueries);
+  }
+  
+  return byCategory;
 }
 
 function parseDate(input: string): ParsedDate {

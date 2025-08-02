@@ -10,7 +10,21 @@ export interface SiteSpecificQueryTemplateParams extends QueryTemplateParams {
   siteId: string;
 }
 
-export type SqlTemplateFunction<T extends QueryTemplateParams = QueryTemplateParams> = (params: T) => string;
+export type SqlTemplateFunction<T extends QueryTemplateParams = QueryTemplateParams> = (params: T) => { sql: string; parameters: any[] };
+
+export interface QueryMetadata {
+  name: string;
+  description: string;
+  category: string;
+  requiredParams: string[];
+  optionalParams?: string[];
+}
+
+export interface EnhancedQueryFunction<TResult = any, TParams = any> {
+  (client: CIPClient, ...args: any[]): AsyncGenerator<TResult[], void, unknown>;
+  metadata: QueryMetadata;
+  QUERY: (params: TParams) => { sql: string; parameters: any[] };
+}
 
 export async function* executeQuery<T>(
   client: CIPClient,
@@ -30,7 +44,7 @@ export async function* executeQuery<T>(
       }
       
       debugger;
-      const firstFrameData = processFrame<T>(result.signature, result.firstFrame);
+      const firstFrameData = processFrame<T>(result.signature || undefined, result.firstFrame);
       if (firstFrameData.length > 0) {
         console.log(`Yielding first frame with ${firstFrameData.length} records`);
         yield firstFrameData;
@@ -54,7 +68,7 @@ export async function* executeQuery<T>(
         currentFrame = nextResponse.frame;
         if (!currentFrame) break;
         
-        const nextData = processFrame<T>(result.signature, currentFrame);
+        const nextData = processFrame<T>(result.signature || undefined, currentFrame);
         if (nextData.length > 0) {
           yield nextData;
         }
@@ -64,6 +78,57 @@ export async function* executeQuery<T>(
     }
   } finally {
     await client.closeStatement(statementId);
+  }
+}
+
+export async function* executeParameterizedQuery<T>(
+  client: CIPClient,
+  sql: string,
+  parameters: any[] = [],
+  batchSize: number = 100
+): AsyncGenerator<T[], void, unknown> {
+  try {
+    const executeResponse = await client.prepareAndExecuteWithParameters(sql, parameters, batchSize);
+    
+    if (executeResponse.results && executeResponse.results.length > 0) {
+      const result = executeResponse.results[0];
+      
+      if (!result.firstFrame) {
+        return;
+      }
+      
+      const firstFrameData = processFrame<T>(result.signature || undefined, result.firstFrame);
+      if (firstFrameData.length > 0) {
+        console.log(`Yielding first frame with ${firstFrameData.length} records`);
+        yield firstFrameData;
+      }
+
+      let done = result.firstFrame.done;
+      let currentFrame: typeof result.firstFrame | undefined = result.firstFrame;
+
+      while (!done && currentFrame) {
+        const currentOffset = typeof currentFrame.offset === 'number' ? currentFrame.offset : (currentFrame.offset ? Number(currentFrame.offset) : 0);
+        const currentRowCount = currentFrame.rows?.length || 0;
+        
+        const nextResponse = await client.fetch(
+          result.statementId || 0,
+          currentOffset + currentRowCount,
+          batchSize
+        );
+        
+        currentFrame = nextResponse.frame;
+        if (!currentFrame) break;
+        
+        const nextData = processFrame<T>(result.signature || undefined, currentFrame);
+        if (nextData.length > 0) {
+          yield nextData;
+        }
+        
+        done = currentFrame.done;
+      }
+    }
+  } catch (error) {
+    throw new Error(`Failed to execute parameterized query: ${error}`);
   }
 }
 

@@ -3,7 +3,7 @@ export { CIPClient, CIPClientOptions } from './cip-client';
 export { Logger, DefaultLogger, NoOpLogger, defaultLogger } from './logger';
 export { getAuthConfig, getAccessToken, getAvaticaServerUrl, AuthConfig } from './auth';
 export { decodeValue, processFrame } from './utils';
-export { IConnectionProperties, IWireMessage } from './protocol';
+export { IConnectionProperties, IWireMessage, IPrepareResponse, IExecuteResponse, IStatementHandle, ITypedValue, Rep } from './protocol';
 export { 
   NormalizedFrame, 
   NormalizedResultSetResponse, 

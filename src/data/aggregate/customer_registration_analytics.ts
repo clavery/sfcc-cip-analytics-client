@@ -1,15 +1,17 @@
-import { CIPClient } from '../../cip-client';
-import { DateRange, cleanSQL } from '../types';
-import { 
-  SiteSpecificQueryTemplateParams, 
+import { CIPClient } from "../../cip-client";
+import { DateRange, cleanSQL } from "../types";
+import {
+  SiteSpecificQueryTemplateParams,
   formatDateRange,
   executeQuery,
+  executeParameterizedQuery,
   QueryTemplateParams,
-  validateRequiredParams
-} from '../helpers';
+  validateRequiredParams,
+  EnhancedQueryFunction,
+} from "../helpers";
 
 export interface RegistrationRecord {
-  registration_date: Date | string;
+  registration_date: Date;
   site_id: number;
   device_class_code: string;
   num_registrations: number;
@@ -18,14 +20,14 @@ export interface RegistrationRecord {
 }
 
 export interface CustomerRegistrationTrends {
-  date: Date | string;
+  date: Date;
   new_registrations: number;
   device_class_code: string;
   nsite_id: string;
 }
 
 export interface CustomerListSnapshot {
-  snapshot_date: Date | string;
+  snapshot_date: Date;
   total_customers: number;
 }
 
@@ -38,21 +40,42 @@ export interface CustomerListSnapshot {
  * @param dateRange Date range to filter results
  * @param batchSize Size of each batch to yield (default: 100)
  */
-export function queryCustomerRegistrationTrends(
+export const queryCustomerRegistrationTrends: EnhancedQueryFunction<
+  CustomerRegistrationTrends,
+  SiteSpecificQueryTemplateParams
+> = function queryCustomerRegistrationTrends(
   client: CIPClient,
   siteId: string,
   dateRange: DateRange,
-  batchSize: number = 100
+  batchSize: number = 100,
 ): AsyncGenerator<CustomerRegistrationTrends[], void, unknown> {
-  const sql = queryCustomerRegistrationTrends.QUERY({ siteId, dateRange });
-  return executeQuery<CustomerRegistrationTrends>(client, cleanSQL(sql), batchSize);
-}
+  const { sql, parameters } = queryCustomerRegistrationTrends.QUERY({
+    siteId,
+    dateRange,
+  });
+  return executeParameterizedQuery<CustomerRegistrationTrends>(
+    client,
+    cleanSQL(sql),
+    parameters,
+    batchSize,
+  );
+};
 
-queryCustomerRegistrationTrends.QUERY = (params: SiteSpecificQueryTemplateParams): string => {
-  validateRequiredParams(params, ['siteId', 'dateRange']);
+queryCustomerRegistrationTrends.metadata = {
+  name: "customer-registration-trends",
+  description:
+    "Track customer acquisition effectiveness and registration drivers",
+  category: "Customer Analytics",
+  requiredParams: ["siteId", "from", "to"],
+};
+
+queryCustomerRegistrationTrends.QUERY = (
+  params: SiteSpecificQueryTemplateParams,
+): { sql: string; parameters: any[] } => {
+  validateRequiredParams(params, ["siteId", "dateRange"]);
   const { startDate, endDate } = formatDateRange(params.dateRange);
-  
-  return `
+
+  const sql = `
     SELECT
       r.registration_date AS "date",
       SUM(r.num_registrations) AS new_registrations,
@@ -65,6 +88,11 @@ queryCustomerRegistrationTrends.QUERY = (params: SiteSpecificQueryTemplateParams
     GROUP BY r.registration_date, r.device_class_code, s.nsite_id
     ORDER BY r.registration_date
   `;
+
+  return {
+    sql,
+    parameters: [],
+  };
 };
 
 /**
@@ -76,21 +104,41 @@ queryCustomerRegistrationTrends.QUERY = (params: SiteSpecificQueryTemplateParams
  * @param dateRange Date range to filter results
  * @param batchSize Size of each batch to yield (default: 100)
  */
-export async function* queryTotalCustomerGrowth(
+export const queryTotalCustomerGrowth: EnhancedQueryFunction<
+  CustomerListSnapshot,
+  SiteSpecificQueryTemplateParams
+> = async function* queryTotalCustomerGrowth(
   client: CIPClient,
   siteId: string,
   dateRange: DateRange,
-  batchSize: number = 100
+  batchSize: number = 100,
 ): AsyncGenerator<CustomerListSnapshot[], void, unknown> {
-  const sql = queryTotalCustomerGrowth.QUERY({ siteId, dateRange });
-  yield* executeQuery<CustomerListSnapshot>(client, cleanSQL(sql), batchSize);
-}
+  const { sql, parameters } = queryTotalCustomerGrowth.QUERY({
+    siteId,
+    dateRange,
+  });
+  yield* executeParameterizedQuery<CustomerListSnapshot>(
+    client,
+    cleanSQL(sql),
+    parameters,
+    batchSize,
+  );
+};
 
-queryTotalCustomerGrowth.QUERY = (params: SiteSpecificQueryTemplateParams): string => {
-  validateRequiredParams(params, ['siteId', 'dateRange']);
+queryTotalCustomerGrowth.metadata = {
+  name: "customer-growth",
+  description: "Analyze customer base growth over time",
+  category: "Customer Analytics",
+  requiredParams: ["siteId", "from", "to"],
+};
+
+queryTotalCustomerGrowth.QUERY = (
+  params: SiteSpecificQueryTemplateParams,
+): { sql: string; parameters: any[] } => {
+  validateRequiredParams(params, ["siteId", "dateRange"]);
   const { startDate, endDate } = formatDateRange(params.dateRange);
-  
-  return `
+
+  const sql = `
     WITH customer_snapshots AS (
       SELECT
         cls.site_id,
@@ -129,6 +177,11 @@ queryTotalCustomerGrowth.QUERY = (params: SiteSpecificQueryTemplateParams): stri
     GROUP BY snapshot_date
     ORDER BY snapshot_date
   `;
+
+  return {
+    sql,
+    parameters: [],
+  };
 };
 
 interface RegistrationQueryParams extends QueryTemplateParams {
@@ -145,52 +198,73 @@ interface RegistrationQueryParams extends QueryTemplateParams {
  * @param filters Optional filters for site, device class
  * @param batchSize Size of each batch to yield (default: 100)
  */
-export async function* queryRegistration(
+export const queryRegistration: EnhancedQueryFunction<
+  RegistrationRecord,
+  RegistrationQueryParams
+> = async function* queryRegistration(
   client: CIPClient,
   dateRange?: DateRange,
   filters?: {
     siteId?: string;
     deviceClassCode?: string;
   },
-  batchSize: number = 100
+  batchSize: number = 100,
 ): AsyncGenerator<RegistrationRecord[], void, unknown> {
-  const params: RegistrationQueryParams = { 
+  const params: RegistrationQueryParams = {
     dateRange: dateRange || { startDate: new Date(0), endDate: new Date() },
-    filters 
+    filters,
   };
-  const sql = queryRegistration.QUERY(params);
-  yield* executeQuery<RegistrationRecord>(client, cleanSQL(sql), batchSize);
-}
+  const { sql, parameters } = queryRegistration.QUERY(params);
+  yield* executeParameterizedQuery<RegistrationRecord>(
+    client,
+    cleanSQL(sql),
+    parameters,
+    batchSize,
+  );
+};
 
-queryRegistration.QUERY = (params: RegistrationQueryParams): string => {
+queryRegistration.metadata = {
+  name: "customer-registrations-raw",
+  description: "Query raw registration data for custom analysis",
+  category: "Customer Analytics",
+  requiredParams: [],
+  optionalParams: ["siteId", "deviceClassCode", "from", "to"],
+};
+
+queryRegistration.QUERY = (
+  params: RegistrationQueryParams,
+): { sql: string; parameters: any[] } => {
   // dateRange is required in the params structure, even if it was optional in the function signature
-  validateRequiredParams(params, ['dateRange']);
-  
-  let sql = 'SELECT r.* FROM ccdw_aggr_registration r';
+  validateRequiredParams(params, ["dateRange"]);
+
+  let sql = "SELECT r.* FROM ccdw_aggr_registration r";
   const joins: string[] = [];
   const conditions: string[] = [];
-  
+
   if (params.dateRange) {
     const { startDate, endDate } = formatDateRange(params.dateRange);
     conditions.push(`r.registration_date >= '${startDate}' AND r.registration_date <= '${endDate}'`);
   }
-  
+
   if (params.filters?.siteId) {
-    joins.push('JOIN ccdw_dim_site s ON s.site_id = r.site_id');
+    joins.push("JOIN ccdw_dim_site s ON s.site_id = r.site_id");
     conditions.push(`s.nsite_id = '${params.filters.siteId}'`);
   }
-  
+
   if (params.filters?.deviceClassCode) {
     conditions.push(`r.device_class_code = '${params.filters.deviceClassCode}'`);
   }
-  
+
   if (joins.length > 0) {
-    sql += ' ' + joins.join(' ');
+    sql += " " + joins.join(" ");
   }
-  
+
   if (conditions.length > 0) {
-    sql += ' WHERE ' + conditions.join(' AND ');
+    sql += " WHERE " + conditions.join(" AND ");
   }
-  
-  return sql;
+
+  return {
+    sql,
+    parameters: [],
+  };
 };
