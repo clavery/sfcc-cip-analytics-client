@@ -45,14 +45,10 @@ export const queryCustomerRegistrationTrends: EnhancedQueryFunction<
   SiteSpecificQueryTemplateParams
 > = function queryCustomerRegistrationTrends(
   client: CIPClient,
-  siteId: string,
-  dateRange: DateRange,
+  params: SiteSpecificQueryTemplateParams,
   batchSize: number = 100,
 ): AsyncGenerator<CustomerRegistrationTrends[], void, unknown> {
-  const { sql, parameters } = queryCustomerRegistrationTrends.QUERY({
-    siteId,
-    dateRange,
-  });
+  const { sql, parameters } = queryCustomerRegistrationTrends.QUERY(params);
   return executeParameterizedQuery<CustomerRegistrationTrends>(
     client,
     cleanSQL(sql),
@@ -109,14 +105,10 @@ export const queryTotalCustomerGrowth: EnhancedQueryFunction<
   SiteSpecificQueryTemplateParams
 > = async function* queryTotalCustomerGrowth(
   client: CIPClient,
-  siteId: string,
-  dateRange: DateRange,
+  params: SiteSpecificQueryTemplateParams,
   batchSize: number = 100,
 ): AsyncGenerator<CustomerListSnapshot[], void, unknown> {
-  const { sql, parameters } = queryTotalCustomerGrowth.QUERY({
-    siteId,
-    dateRange,
-  });
+  const { sql, parameters } = queryTotalCustomerGrowth.QUERY(params);
   yield* executeParameterizedQuery<CustomerListSnapshot>(
     client,
     cleanSQL(sql),
@@ -185,10 +177,8 @@ queryTotalCustomerGrowth.QUERY = (
 };
 
 interface RegistrationQueryParams extends QueryTemplateParams {
-  filters?: {
-    siteId?: string;
-    deviceClassCode?: string;
-  };
+  siteId?: string;
+  deviceClassCode?: string;
 }
 
 /**
@@ -203,18 +193,15 @@ export const queryRegistration: EnhancedQueryFunction<
   RegistrationQueryParams
 > = async function* queryRegistration(
   client: CIPClient,
-  dateRange?: DateRange,
-  filters?: {
-    siteId?: string;
-    deviceClassCode?: string;
-  },
+  params: RegistrationQueryParams,
   batchSize: number = 100,
 ): AsyncGenerator<RegistrationRecord[], void, unknown> {
-  const params: RegistrationQueryParams = {
-    dateRange: dateRange || { startDate: new Date(0), endDate: new Date() },
-    filters,
+  // Ensure dateRange has a default if not provided
+  const queryParams: RegistrationQueryParams = {
+    ...params,
+    dateRange: params.dateRange || { startDate: new Date(0), endDate: new Date() },
   };
-  const { sql, parameters } = queryRegistration.QUERY(params);
+  const { sql, parameters } = queryRegistration.QUERY(queryParams);
   yield* executeParameterizedQuery<RegistrationRecord>(
     client,
     cleanSQL(sql),
@@ -246,13 +233,13 @@ queryRegistration.QUERY = (
     conditions.push(`r.registration_date >= '${startDate}' AND r.registration_date <= '${endDate}'`);
   }
 
-  if (params.filters?.siteId) {
+  if (params.siteId) {
     joins.push("JOIN ccdw_dim_site s ON s.site_id = r.site_id");
-    conditions.push(`s.nsite_id = '${params.filters.siteId}'`);
+    conditions.push(`s.nsite_id = '${params.siteId}'`);
   }
 
-  if (params.filters?.deviceClassCode) {
-    conditions.push(`r.device_class_code = '${params.filters.deviceClassCode}'`);
+  if (params.deviceClassCode) {
+    conditions.push(`r.device_class_code = '${params.deviceClassCode}'`);
   }
 
   if (joins.length > 0) {

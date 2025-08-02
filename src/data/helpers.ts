@@ -20,8 +20,8 @@ export interface QueryMetadata {
   optionalParams?: string[];
 }
 
-export interface EnhancedQueryFunction<TResult = any, TParams = any> {
-  (client: CIPClient, ...args: any[]): AsyncGenerator<TResult[], void, unknown>;
+export interface EnhancedQueryFunction<TResult = any, TParams extends QueryTemplateParams = QueryTemplateParams> {
+  (client: CIPClient, params: TParams, batchSize?: number): AsyncGenerator<TResult[], void, unknown>;
   metadata: QueryMetadata;
   QUERY: (params: TParams) => { sql: string; parameters: any[] };
 }

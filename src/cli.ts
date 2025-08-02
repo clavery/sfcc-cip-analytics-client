@@ -6,6 +6,9 @@ import { processFrame } from './utils';
 import { NormalizedFrame } from './normalized-types';
 import { formatDateForSQL } from './data/types';
 import { queryCustomerRegistrationTrends, queryTotalCustomerGrowth, queryRegistration } from './data/aggregate/customer_registration_analytics';
+import { queryTopSellingProducts, queryProductCoPurchaseAnalysis, queryProductPerformanceByDimension, queryProductSalesSummary } from './data/aggregate/product_analytics';
+import { queryPromotionDiscountAnalysis, queryPromotionPerformanceByType, queryPromotionSalesSummary } from './data/aggregate/promotion_analytics';
+import { queryRecommendationPerformanceByAlgorithm, queryOverallRecommendationPerformance, queryRecommendationWidgetPlacement } from './data/aggregate/recommendation_analytics';
 import { EnhancedQueryFunction, QueryMetadata } from './data/helpers';
 import { DateRange } from './data/types';
 
@@ -15,10 +18,24 @@ interface ParsedDate {
 }
 
 // Registry of available enhanced query functions
-const availableQueries: EnhancedQueryFunction[] = [
+const availableQueries: EnhancedQueryFunction<any, any>[] = [
+  // Customer Analytics
   queryCustomerRegistrationTrends,
   queryTotalCustomerGrowth,
-  queryRegistration
+  queryRegistration,
+  // Product Analytics
+  queryTopSellingProducts,
+  queryProductCoPurchaseAnalysis,
+  queryProductPerformanceByDimension,
+  queryProductSalesSummary,
+  // Promotion Analytics
+  queryPromotionDiscountAnalysis,
+  queryPromotionPerformanceByType,
+  queryPromotionSalesSummary,
+  // Recommendation Analytics
+  queryRecommendationPerformanceByAlgorithm,
+  queryOverallRecommendationPerformance,
+  queryRecommendationWidgetPlacement
 ];
 
 interface QueryDefinition {
@@ -41,25 +58,21 @@ function getQueryByName(name: string): QueryDefinition | undefined {
     requiredParams: queryFn.metadata.requiredParams,
     optionalParams: queryFn.metadata.optionalParams,
     execute: (client: CIPClient, params: any) => {
-      // Convert generic params to specific function parameters
-      const dateRange: DateRange | undefined = params.from && params.to ? {
-        startDate: new Date(params.from),
-        endDate: new Date(params.to)
-      } : undefined;
-
-      if (queryFn.metadata.name === 'customer-registration-trends') {
-        return queryCustomerRegistrationTrends(client, params.siteId, dateRange!, 100);
-      } else if (queryFn.metadata.name === 'customer-growth') {
-        return queryTotalCustomerGrowth(client, params.siteId, dateRange!, 100);
-      } else if (queryFn.metadata.name === 'customer-registrations-raw') {
-        const filters = {
-          siteId: params.siteId,
-          deviceClassCode: params.deviceClassCode
-        };
-        return queryRegistration(client, dateRange, filters, 100);
-      } else {
-        throw new Error(`Unknown query: ${queryFn.metadata.name}`);
-      }
+      // Only handle dateRange conversion - pass everything else through directly
+      const queryParams: any = {
+        ...params,
+        dateRange: params.from && params.to ? {
+          startDate: new Date(params.from),
+          endDate: new Date(params.to)
+        } : undefined
+      };
+      
+      // Remove the CLI-specific from/to params since they're now in dateRange
+      delete queryParams.from;
+      delete queryParams.to;
+      
+      // Call the query function with the standardized params
+      return queryFn(client, queryParams, params.batchSize || 100);
     }
   };
 }
