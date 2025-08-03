@@ -1,8 +1,8 @@
 import { CIPClient } from "sfcc-cip-analytics-client/cip-client";
 import {
   queryOcapiRequests,
-  OcapiRequestRecord,
-} from "sfcc-cip-analytics-client/data/aggregate/ocapi";
+  OcapiPerformanceRecord,
+} from "sfcc-cip-analytics-client/data/aggregate/technical_performance_analytics";
 import * as path from "path";
 
 async function main() {
@@ -31,11 +31,14 @@ async function main() {
       `\nExample 3: Collecting all OCAPI requests for ${specificDate.toISOString().split("T")[0]}...`,
     );
 
-    const allResults: OcapiRequestRecord[] = [];
+    const allResults: OcapiPerformanceRecord[] = [];
 
     const query = queryOcapiRequests(
       client,
-      { dateRange: { startDate: specificDate, endDate: specificDate } },
+      { 
+        siteId: 'RefArch', // Example site ID - should be set via environment variable in real usage
+        dateRange: { startDate: specificDate, endDate: specificDate } 
+      },
       50,
     );
 

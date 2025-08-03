@@ -1,5 +1,4 @@
 // Re-export all aggregate data helpers
-export * from './ocapi';
 export * from './sales_analytics';
 export * from './payment_method_analytics';
 export * from './traffic_source_analytics';

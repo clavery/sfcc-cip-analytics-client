@@ -9,7 +9,7 @@ import { queryCustomerRegistrationTrends } from './data/aggregate/customer_regis
 import { queryTopSellingProducts, queryProductCoPurchaseAnalysis } from './data/aggregate/product_analytics';
 import { queryPromotionDiscountAnalysis } from './data/aggregate/promotion_analytics';
 // Recommendation analytics functions removed - no corresponding SQL blocks found
-import { queryOcapiRequests } from './data/aggregate/ocapi';
+import { queryOcapiRequests } from './data/aggregate/technical_performance_analytics';
 import { querySalesAnalytics, querySalesSummary } from './data/aggregate/sales_analytics';
 import { querySearchQueryPerformance } from './data/aggregate/search_analytics';
 import { queryPaymentMethodPerformance } from './data/aggregate/payment_method_analytics';

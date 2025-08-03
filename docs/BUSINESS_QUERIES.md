@@ -148,68 +148,6 @@ for await (const batch of successfulSearches) {
 cip-query query --name search-query-performance --param siteId=mysite --param hasResults=true --from "2024-01-01" --to "2024-01-31"
 ```
 
-### queryFailedSearches
-
-**Business Question:** What are customers searching for that we don't have?
-
-**Primary Users:** Merchandising and Product teams
-
-**API Usage:**
-```typescript
-import { queryFailedSearches } from 'sfcc-cip-analytics-client';
-
-const failedSearches = queryFailedSearches(
-  client,
-  {
-    siteId: 'mysite',
-    dateRange: { startDate: new Date('2024-01-01'), endDate: new Date('2024-01-31') },
-    limit: 50
-  },
-  100
-);
-
-for await (const batch of failedSearches) {
-  console.log(`Processed ${batch.length} failed search queries`);
-  // Each record has: query, search_count, unique_searchers
-}
-```
-
-**CLI Usage:**
-```bash
-cip-query query --name failed-searches --param siteId=mysite --param limit=50 --from "2024-01-01" --to "2024-01-31"
-```
-
-### querySearchConversion
-
-**Business Question:** How do different search patterns convert across customer segments?
-
-**Primary Users:** UX and Analytics teams
-
-**API Usage:**
-```typescript
-import { querySearchConversion } from 'sfcc-cip-analytics-client';
-
-const searchConversion = querySearchConversion(
-  client,
-  {
-    dateRange: { startDate: new Date('2024-01-01'), endDate: new Date('2024-01-31') },
-    siteId: 'mysite',
-    hasResults: true,
-    deviceClassCode: 'desktop'
-  },
-  100
-);
-
-for await (const batch of searchConversion) {
-  console.log(`Processed ${batch.length} search conversion records`);
-  // Each record has: search_date, query, has_results, num_searches, num_orders, std_revenue
-}
-```
-
-**CLI Usage:**
-```bash
-cip-query query --name search-conversion --param siteId=mysite --param hasResults=true --param deviceClassCode=desktop --from "2024-01-01" --to "2024-01-31"
-```
 
 ## Customer Analytics
 
@@ -295,6 +233,99 @@ const query = queryTopReferrers(
 **CLI Usage:**
 ```bash
 cip-query query --name top-referrers --param siteId=mysite --param limit=25 --from "2024-01-01" --to "2024-01-31"
+```
+
+## Product Analytics
+
+### queryTopSellingProducts
+
+**Business Question:** How do my products perform across different channels?
+
+**Primary Users:** Buyers and Merchandising teams
+
+**API Usage:**
+```typescript
+import { queryTopSellingProducts } from 'sfcc-cip-analytics-client';
+
+const query = queryTopSellingProducts(
+  client,
+  {
+    siteId: 'mysite',
+    dateRange: { startDate: new Date('2024-01-01'), endDate: new Date('2024-01-31') }
+  },
+  100
+);
+
+for await (const batch of query) {
+  console.log(`Processed ${batch.length} top selling products`);
+  // Each record has: nproduct_id, product_display_name, units_sold, std_revenue, order_count, device_class_code, registered, nsite_id
+}
+```
+
+**CLI Usage:**
+```bash
+cip-query query --name top-selling-products --param siteId=mysite --from "2024-01-01" --to "2024-01-31"
+```
+
+### queryProductCoPurchaseAnalysis
+
+**Business Question:** Which products are frequently bought together?
+
+**Primary Users:** Merchandising and Product teams
+
+**API Usage:**
+```typescript
+import { queryProductCoPurchaseAnalysis } from 'sfcc-cip-analytics-client';
+
+const query = queryProductCoPurchaseAnalysis(
+  client,
+  {
+    siteId: 'mysite',
+    dateRange: { startDate: new Date('2024-01-01'), endDate: new Date('2024-01-31') }
+  },
+  100
+);
+
+for await (const batch of query) {
+  console.log(`Processed ${batch.length} product co-purchase records`);
+  // Each record has: product_1_id, product_1_name, product_2_id, product_2_name, co_purchase_count, std_cobuy_revenue
+}
+```
+
+**CLI Usage:**
+```bash
+cip-query query --name product-co-purchase-analysis --param siteId=mysite --from "2024-01-01" --to "2024-01-31"
+```
+
+## Promotion Analytics
+
+### queryPromotionDiscountAnalysis
+
+**Business Question:** Are my promotions driving incremental sales or just discounting existing sales?
+
+**Primary Users:** Marketing and Merchandising teams
+
+**API Usage:**
+```typescript
+import { queryPromotionDiscountAnalysis } from 'sfcc-cip-analytics-client';
+
+const query = queryPromotionDiscountAnalysis(
+  client,
+  {
+    dateRange: { startDate: new Date('2024-01-01'), endDate: new Date('2024-01-31') }
+  },
+  100
+);
+
+for await (const batch of query) {
+  console.log(`Processed ${batch.length} promotion discount records`);
+  // Each record has: submit_day, total_orders, promotion_class, std_total_discount, promotion_orders, avg_discount_per_order
+}
+```
+
+**CLI Usage:**
+```bash
+cip-query query --name promotion-discount-analysis --from "2024-01-01" --to "2024-01-31"
 ```
 
 ## Additional Business Queries
