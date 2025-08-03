@@ -1,6 +1,14 @@
-import { CIPClient } from '../../cip-client';
-import { DateRange, formatDateForSQL, cleanSQL } from '../types';
-import { processFrame } from '../../utils';
+import { CIPClient } from "../../cip-client";
+import { DateRange, cleanSQL } from "../types";
+import {
+  SiteSpecificQueryTemplateParams,
+  formatDateRange,
+  executeQuery,
+  executeParameterizedQuery,
+  QueryTemplateParams,
+  validateRequiredParams,
+  EnhancedQueryFunction,
+} from "../helpers";
 
 export interface VisitReferrerRecord {
   visit_date: Date | string;
@@ -32,6 +40,10 @@ export interface TrafficSourceConversion {
   revenue_per_visit: number;
 }
 
+interface TopReferrersQueryParams extends SiteSpecificQueryTemplateParams {
+  limit?: number;
+}
+
 /**
  * Query top referrers to identify high-value traffic sources
  * Business Question: Where is my traffic coming from and which sources drive the most valuable visitors?
@@ -42,88 +54,71 @@ export interface TrafficSourceConversion {
  * @param limit Number of top referrers to return (default: 20)
  * @param batchSize Size of each batch to yield (default: 100)
  */
-export async function* queryTopReferrers(
+export const queryTopReferrers: EnhancedQueryFunction<
+  TopReferrerAnalytics,
+  TopReferrersQueryParams
+> = function queryTopReferrers(
   client: CIPClient,
-  siteId: string,
-  dateRange: DateRange,
-  limit: number = 20,
-  batchSize: number = 100
+  params: TopReferrersQueryParams,
+  batchSize: number = 100,
 ): AsyncGenerator<TopReferrerAnalytics[], void, unknown> {
-  const statementId = await client.createStatement();
+  const { sql, parameters } = queryTopReferrers.QUERY(params);
+  return executeParameterizedQuery<TopReferrerAnalytics>(
+    client,
+    cleanSQL(sql),
+    parameters,
+    batchSize,
+  );
+};
 
-  try {
-    const startDateStr = formatDateForSQL(dateRange.startDate);
-    const endDateStr = formatDateForSQL(dateRange.endDate);
-    
-    const sql = cleanSQL(`
-      WITH total AS (
-        SELECT SUM(num_visits) AS total_visits
-        FROM ccdw_aggr_visit_referrer
-        WHERE visit_date >= '${startDateStr}'
-          AND visit_date <= '${endDateStr}'
-      )
-      SELECT
-        vr.referrer_medium AS traffic_medium,
-        vr.referrer_source AS traffic_source,
-        SUM(vr.num_visits) AS total_visits,
-        SUM(vr.num_visits) * 100.0 / total.total_visits AS visit_percentage
-      FROM ccdw_aggr_visit_referrer vr
-      JOIN ccdw_dim_site s
-        ON s.site_id = vr.site_id
-      JOIN total ON TRUE
-      WHERE vr.visit_date >= '${startDateStr}'
-        AND vr.visit_date <= '${endDateStr}'
-        AND s.nsite_id = '${siteId}'
-      GROUP BY
-        vr.referrer_medium,
-        vr.referrer_source,
-        total.total_visits
-      ORDER BY total_visits DESC
-      LIMIT ${limit}
-    `);
+queryTopReferrers.metadata = {
+  name: "top-referrers",
+  description:
+    "Identify high-value traffic sources and referrer performance",
+  category: "Traffic Analytics",
+  requiredParams: ["siteId", "from", "to"],
+  optionalParams: ["limit"],
+};
 
-    const executeResponse = await client.execute(statementId, sql, batchSize);
-    
-    if (executeResponse.results && executeResponse.results.length > 0) {
-      const result = executeResponse.results[0];
-      
-      if (!result.firstFrame) {
-        return;
-      }
-      
-      const firstFrameData = processFrame<TopReferrerAnalytics>(result.signature, result.firstFrame);
-      if (firstFrameData.length > 0) {
-        yield firstFrameData;
-      }
+queryTopReferrers.QUERY = (
+  params: TopReferrersQueryParams,
+): { sql: string; parameters: any[] } => {
+  validateRequiredParams(params, ["siteId", "dateRange"]);
+  const { startDate, endDate } = formatDateRange(params.dateRange);
+  const limit = params.limit || 20;
 
-      let done = result.firstFrame.done;
-      let currentFrame: typeof result.firstFrame | undefined = result.firstFrame;
+  const sql = `
+    WITH total AS (
+      SELECT SUM(num_visits) AS total_visits
+      FROM ccdw_aggr_visit_referrer
+      WHERE visit_date >= '${startDate}'
+        AND visit_date <= '${endDate}'
+    )
+    SELECT
+      vr.referrer_medium AS traffic_medium,
+      vr.referrer_source AS traffic_source,
+      SUM(vr.num_visits) AS total_visits,
+      SUM(vr.num_visits) * 100.0 / total.total_visits AS visit_percentage
+    FROM ccdw_aggr_visit_referrer vr
+    JOIN ccdw_dim_site s
+      ON s.site_id = vr.site_id
+    JOIN total ON TRUE
+    WHERE vr.visit_date >= '${startDate}'
+      AND vr.visit_date <= '${endDate}'
+      AND s.nsite_id = '${params.siteId}'
+    GROUP BY
+      vr.referrer_medium,
+      vr.referrer_source,
+      total.total_visits
+    ORDER BY total_visits DESC
+    LIMIT ${limit}
+  `;
 
-      while (!done && currentFrame) {
-        const currentOffset = currentFrame.offset || 0;
-        const currentRowCount = currentFrame.rows?.length || 0;
-        
-        const nextResponse = await client.fetch(
-          result.statementId || 0,
-          currentOffset + currentRowCount,
-          batchSize
-        );
-        
-        currentFrame = nextResponse.frame;
-        if (!currentFrame) break;
-        
-        const nextData = processFrame<TopReferrerAnalytics>(result.signature, currentFrame);
-        if (nextData.length > 0) {
-          yield nextData;
-        }
-        
-        done = currentFrame.done;
-      }
-    }
-  } finally {
-    await client.closeStatement(statementId);
-  }
-}
+  return {
+    sql,
+    parameters: [],
+  };
+};
 
 /**
  * Query traffic source conversion rates to optimize marketing spend
@@ -134,87 +129,75 @@ export async function* queryTopReferrers(
  * @param dateRange Date range to filter results
  * @param batchSize Size of each batch to yield (default: 100)
  */
-export async function* queryTrafficSourceConversion(
+export const queryTrafficSourceConversion: EnhancedQueryFunction<
+  TrafficSourceConversion,
+  SiteSpecificQueryTemplateParams
+> = async function* queryTrafficSourceConversion(
   client: CIPClient,
-  siteId: string,
-  dateRange: DateRange,
-  batchSize: number = 100
+  params: SiteSpecificQueryTemplateParams,
+  batchSize: number = 100,
 ): AsyncGenerator<TrafficSourceConversion[], void, unknown> {
-  const statementId = await client.createStatement();
+  const { sql, parameters } = queryTrafficSourceConversion.QUERY(params);
+  yield* executeParameterizedQuery<TrafficSourceConversion>(
+    client,
+    cleanSQL(sql),
+    parameters,
+    batchSize,
+  );
+};
 
-  try {
-    const startDateStr = formatDateForSQL(dateRange.startDate);
-    const endDateStr = formatDateForSQL(dateRange.endDate);
-    
-    const sql = cleanSQL(`
-      SELECT
-        vr.referrer_medium AS traffic_medium,
-        SUM(v.num_visits) AS total_visits,
-        SUM(v.num_converted_visits) AS converted_visits,
-        SUM(v.std_revenue) AS std_revenue,
-        CASE WHEN SUM(v.num_visits) > 0
-             THEN (CAST(SUM(v.num_converted_visits) AS FLOAT) / SUM(v.num_visits)) * 100
-             ELSE 0
-        END AS conversion_rate,
-        CASE WHEN SUM(v.num_visits) > 0
-             THEN SUM(v.std_revenue) / SUM(v.num_visits)
-             ELSE 0
-        END AS revenue_per_visit
-      FROM ccdw_aggr_visit_referrer vr
-      JOIN ccdw_aggr_visit v
-        ON v.visit_date = vr.visit_date
-        AND v.site_id = vr.site_id
-        AND v.device_class_code = vr.device_class_code
-      JOIN ccdw_dim_site s
-        ON s.site_id = vr.site_id
-      WHERE vr.visit_date >= '${startDateStr}'
-        AND vr.visit_date <= '${endDateStr}'
-        AND s.nsite_id = '${siteId}'
-      GROUP BY vr.referrer_medium
-      ORDER BY std_revenue DESC
-    `);
+queryTrafficSourceConversion.metadata = {
+  name: "traffic-source-conversion",
+  description: "Analyze traffic source conversion rates and revenue impact",
+  category: "Traffic Analytics",
+  requiredParams: ["siteId", "from", "to"],
+};
 
-    const executeResponse = await client.execute(statementId, sql, batchSize);
-    
-    if (executeResponse.results && executeResponse.results.length > 0) {
-      const result = executeResponse.results[0];
-      
-      if (!result.firstFrame) {
-        return;
-      }
-      
-      const firstFrameData = processFrame<TrafficSourceConversion>(result.signature, result.firstFrame);
-      if (firstFrameData.length > 0) {
-        yield firstFrameData;
-      }
+queryTrafficSourceConversion.QUERY = (
+  params: SiteSpecificQueryTemplateParams,
+): { sql: string; parameters: any[] } => {
+  validateRequiredParams(params, ["siteId", "dateRange"]);
+  const { startDate, endDate } = formatDateRange(params.dateRange);
 
-      let done = result.firstFrame.done;
-      let currentFrame: typeof result.firstFrame | undefined = result.firstFrame;
+  const sql = `
+    SELECT
+      vr.referrer_medium AS traffic_medium,
+      SUM(v.num_visits) AS total_visits,
+      SUM(v.num_converted_visits) AS converted_visits,
+      SUM(v.std_revenue) AS std_revenue,
+      CASE WHEN SUM(v.num_visits) > 0
+           THEN (CAST(SUM(v.num_converted_visits) AS FLOAT) / SUM(v.num_visits)) * 100
+           ELSE 0
+      END AS conversion_rate,
+      CASE WHEN SUM(v.num_visits) > 0
+           THEN SUM(v.std_revenue) / SUM(v.num_visits)
+           ELSE 0
+      END AS revenue_per_visit
+    FROM ccdw_aggr_visit_referrer vr
+    JOIN ccdw_aggr_visit v
+      ON v.visit_date = vr.visit_date
+      AND v.site_id = vr.site_id
+      AND v.device_class_code = vr.device_class_code
+    JOIN ccdw_dim_site s
+      ON s.site_id = vr.site_id
+    WHERE vr.visit_date >= '${startDate}'
+      AND vr.visit_date <= '${endDate}'
+      AND s.nsite_id = '${params.siteId}'
+    GROUP BY vr.referrer_medium
+    ORDER BY std_revenue DESC
+  `;
 
-      while (!done && currentFrame) {
-        const currentOffset = currentFrame.offset || 0;
-        const currentRowCount = currentFrame.rows?.length || 0;
-        
-        const nextResponse = await client.fetch(
-          result.statementId || 0,
-          currentOffset + currentRowCount,
-          batchSize
-        );
-        
-        currentFrame = nextResponse.frame;
-        if (!currentFrame) break;
-        
-        const nextData = processFrame<TrafficSourceConversion>(result.signature, currentFrame);
-        if (nextData.length > 0) {
-          yield nextData;
-        }
-        
-        done = currentFrame.done;
-      }
-    }
-  } finally {
-    await client.closeStatement(statementId);
-  }
+  return {
+    sql,
+    parameters: [],
+  };
+};
+
+interface VisitReferrerQueryParams extends QueryTemplateParams {
+  siteId?: string;
+  deviceClassCode?: string;
+  referrerMedium?: string;
+  referrerSource?: string;
 }
 
 /**
@@ -224,94 +207,78 @@ export async function* queryTrafficSourceConversion(
  * @param filters Optional filters for site, device, referrer medium/source
  * @param batchSize Size of each batch to yield (default: 100)
  */
-export async function* queryVisitReferrer(
+export const queryVisitReferrer: EnhancedQueryFunction<
+  VisitReferrerRecord,
+  VisitReferrerQueryParams
+> = async function* queryVisitReferrer(
   client: CIPClient,
-  dateRange?: DateRange,
-  filters?: {
-    siteId?: string;
-    deviceClassCode?: string;
-    referrerMedium?: string;
-    referrerSource?: string;
-  },
-  batchSize: number = 100
+  params: VisitReferrerQueryParams,
+  batchSize: number = 100,
 ): AsyncGenerator<VisitReferrerRecord[], void, unknown> {
-  const statementId = await client.createStatement();
+  // Ensure dateRange has a default if not provided
+  const queryParams: VisitReferrerQueryParams = {
+    ...params,
+    dateRange: params.dateRange || { startDate: new Date(0), endDate: new Date() },
+  };
+  const { sql, parameters } = queryVisitReferrer.QUERY(queryParams);
+  yield* executeParameterizedQuery<VisitReferrerRecord>(
+    client,
+    cleanSQL(sql),
+    parameters,
+    batchSize,
+  );
+};
 
-  try {
-    let sql = 'SELECT vr.* FROM ccdw_aggr_visit_referrer vr';
-    const joins: string[] = [];
-    const conditions: string[] = [];
-    
-    if (dateRange) {
-      const startDateStr = formatDateForSQL(dateRange.startDate);
-      const endDateStr = formatDateForSQL(dateRange.endDate);
-      conditions.push(`vr.visit_date >= '${startDateStr}' AND vr.visit_date <= '${endDateStr}'`);
-    }
-    
-    if (filters?.siteId) {
-      joins.push('JOIN ccdw_dim_site s ON s.site_id = vr.site_id');
-      conditions.push(`s.nsite_id = '${filters.siteId}'`);
-    }
-    
-    if (filters?.deviceClassCode) {
-      conditions.push(`vr.device_class_code = '${filters.deviceClassCode}'`);
-    }
-    
-    if (filters?.referrerMedium) {
-      conditions.push(`vr.referrer_medium = '${filters.referrerMedium}'`);
-    }
-    
-    if (filters?.referrerSource) {
-      conditions.push(`vr.referrer_source = '${filters.referrerSource}'`);
-    }
-    
-    if (joins.length > 0) {
-      sql += ' ' + joins.join(' ');
-    }
-    
-    if (conditions.length > 0) {
-      sql += ' WHERE ' + conditions.join(' AND ');
-    }
+queryVisitReferrer.metadata = {
+  name: "visit-referrer-raw",
+  description: "Query raw visit referrer data for custom traffic analysis",
+  category: "Traffic Analytics",
+  requiredParams: [],
+  optionalParams: ["siteId", "deviceClassCode", "referrerMedium", "referrerSource", "from", "to"],
+};
 
-    const executeResponse = await client.execute(statementId, cleanSQL(sql), batchSize);
-    
-    if (executeResponse.results && executeResponse.results.length > 0) {
-      const result = executeResponse.results[0];
-      
-      if (!result.firstFrame) {
-        return;
-      }
-      
-      const firstFrameData = processFrame<VisitReferrerRecord>(result.signature, result.firstFrame);
-      if (firstFrameData.length > 0) {
-        yield firstFrameData;
-      }
+queryVisitReferrer.QUERY = (
+  params: VisitReferrerQueryParams,
+): { sql: string; parameters: any[] } => {
+  // dateRange is required in the params structure, even if it was optional in the function signature
+  validateRequiredParams(params, ["dateRange"]);
 
-      let done = result.firstFrame.done;
-      let currentFrame: typeof result.firstFrame | undefined = result.firstFrame;
+  let sql = "SELECT vr.* FROM ccdw_aggr_visit_referrer vr";
+  const joins: string[] = [];
+  const conditions: string[] = [];
 
-      while (!done && currentFrame) {
-        const currentOffset = currentFrame.offset || 0;
-        const currentRowCount = currentFrame.rows?.length || 0;
-        
-        const nextResponse = await client.fetch(
-          result.statementId || 0,
-          currentOffset + currentRowCount,
-          batchSize
-        );
-        
-        currentFrame = nextResponse.frame;
-        if (!currentFrame) break;
-        
-        const nextData = processFrame<VisitReferrerRecord>(result.signature, currentFrame);
-        if (nextData.length > 0) {
-          yield nextData;
-        }
-        
-        done = currentFrame.done;
-      }
-    }
-  } finally {
-    await client.closeStatement(statementId);
+  if (params.dateRange) {
+    const { startDate, endDate } = formatDateRange(params.dateRange);
+    conditions.push(`vr.visit_date >= '${startDate}' AND vr.visit_date <= '${endDate}'`);
   }
-}
+
+  if (params.siteId) {
+    joins.push("JOIN ccdw_dim_site s ON s.site_id = vr.site_id");
+    conditions.push(`s.nsite_id = '${params.siteId}'`);
+  }
+
+  if (params.deviceClassCode) {
+    conditions.push(`vr.device_class_code = '${params.deviceClassCode}'`);
+  }
+
+  if (params.referrerMedium) {
+    conditions.push(`vr.referrer_medium = '${params.referrerMedium}'`);
+  }
+
+  if (params.referrerSource) {
+    conditions.push(`vr.referrer_source = '${params.referrerSource}'`);
+  }
+
+  if (joins.length > 0) {
+    sql += " " + joins.join(" ");
+  }
+
+  if (conditions.length > 0) {
+    sql += " WHERE " + conditions.join(" AND ");
+  }
+
+  return {
+    sql,
+    parameters: [],
+  };
+};

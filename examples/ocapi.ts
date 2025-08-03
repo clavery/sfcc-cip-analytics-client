@@ -35,7 +35,7 @@ async function main() {
 
     const query = queryOcapiRequests(
       client,
-      { startDate: specificDate, endDate: specificDate },
+      { dateRange: { startDate: specificDate, endDate: specificDate } },
       50,
     );
 

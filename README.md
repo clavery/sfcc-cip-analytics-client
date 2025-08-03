@@ -6,6 +6,10 @@ See [https://developer.salesforce.com/docs/commerce/b2c-commerce/guide/jdbc_intr
 
 ![Screenshot of CLI output](https://raw.githubusercontent.com/clavery/sfcc-cip-analytics-client/refs/heads/main/assets/screenshot.png)
 
+> [!IMPORTANT]  
+> Many queries may not work and return an SQL error. This is a work in progress to discover the proper queries applied the CIP schemas.
+
+
 ## Installation
 
 > [!IMPORTANT]  
@@ -53,17 +57,32 @@ export SFCC_CIP_INSTANCE="your-instance-name" # example abcd_prd
 export SFCC_DEBUG=true
 ```
 
+### Commands
+
+The CLI supports two main commands:
+
+#### `sql` - Execute custom SQL queries
+
+```bash
+cip-query sql "SELECT * FROM ccdw_aggr_ocapi_request LIMIT 10"
+```
+
+#### `query` - Execute predefined business object queries
+
+```bash
+cip-query query ocapi-requests --from "2024-01-01" --to "2024-01-31"
+```
 
 ### Basic Query
 
 ```bash
-cip-query "SELECT * FROM ccdw_aggr_ocapi_request LIMIT 10"
+cip-query sql "SELECT * FROM ccdw_aggr_ocapi_request LIMIT 10"
 ```
 
 ### With Date Placeholders
 
 ```bash
-cip-query --from "2024-07-01" --to "2024-07-31" \
+cip-query sql --from "2024-07-01" --to "2024-07-31" \
   "SELECT * FROM ccdw_aggr_ocapi_request WHERE request_date >= <FROM> AND request_date <= <TO>"
 ```
 
@@ -71,17 +90,17 @@ cip-query --from "2024-07-01" --to "2024-07-31" \
 
 ```bash
 # JSON output
-cip-query --format json "SELECT api_name, COUNT(*) as count FROM ccdw_aggr_ocapi_request GROUP BY api_name"
+cip-query sql --format json "SELECT api_name, COUNT(*) as count FROM ccdw_aggr_ocapi_request GROUP BY api_name"
 
 # CSV output for spreadsheet analysis
-cip-query --format csv --from "last week" \
+cip-query sql --format csv --from "last week" \
   "SELECT * FROM ccdw_aggr_ocapi_request WHERE request_date >= <FROM>"
 ```
 
 ### Using Heredocs (Multi-line SQL)
 
 ```bash
-cip-query --format json --from "2024-01-01" --to "2024-01-31" <<SQL
+cip-query sql --format json --from "2024-01-01" --to "2024-01-31" <<SQL
   SELECT 
     api_name,
     "method",
@@ -99,7 +118,7 @@ SQL
 
 ```bash
 # Save complex queries in .sql files
-cip-query --format csv < my-analytics-query.sql
+cip-query sql --format csv < my-analytics-query.sql
 ```
 
 ## API Usage
@@ -137,27 +156,30 @@ async function queryData() {
 queryData();
 ```
 
-### Using Business Object Helpers
+### Business Use Case Queries
 
-These return simple arrays of plain old JavaScript objects, making it easy to work with the data.
+The client provides specialized query functions for common business analytics use cases. These return simple arrays of plain old JavaScript objects, making it easy to work with the data.
+
+For complete documentation of all available business queries, see [Business Queries Reference](./docs/BUSINESS_QUERIES.md).
 
 ```typescript
-import { CIPClient, queryOcapiRequests } from 'sfcc-cip-analytics-client';
+import { CIPClient, querySalesAnalytics } from 'sfcc-cip-analytics-client';
 
 const client = new CIPClient(clientId, clientSecret, instance);
 
-async function analyzeOcapiData() {
+async function analyzeSalesData() {
   await client.openConnection();
   
-  const query = queryOcapiRequests(
-    client, 
+  const query = querySalesAnalytics(
+    client,
+    'mysite', // site ID
     { startDate: new Date('2024-01-01'), endDate: new Date('2024-01-31') },
     100 // batch size
-  )
-  // Query OCAPI requests with date filtering
+  );
+  
   for await (const batch of query) {
-    console.log(`Processed ${batch.length} OCAPI requests`);
-    // Process data...
+    console.log(`Processed ${batch.length} daily sales metrics`);
+    // Each record has: date, std_revenue, orders, std_aov, units, aos
   }
   
   await client.closeConnection();

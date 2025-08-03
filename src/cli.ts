@@ -9,6 +9,14 @@ import { queryCustomerRegistrationTrends, queryTotalCustomerGrowth, queryRegistr
 import { queryTopSellingProducts, queryProductCoPurchaseAnalysis, queryProductPerformanceByDimension, queryProductSalesSummary } from './data/aggregate/product_analytics';
 import { queryPromotionDiscountAnalysis, queryPromotionPerformanceByType, queryPromotionSalesSummary } from './data/aggregate/promotion_analytics';
 import { queryRecommendationPerformanceByAlgorithm, queryOverallRecommendationPerformance, queryRecommendationWidgetPlacement } from './data/aggregate/recommendation_analytics';
+import { queryOcapiRequests } from './data/aggregate/ocapi';
+import { querySalesAnalytics, querySalesSummary } from './data/aggregate/sales_analytics';
+import { querySearchQueryPerformance, queryFailedSearches, querySearchConversion } from './data/aggregate/search_analytics';
+import { queryPaymentMethodPerformance, queryGiftCertificateAnalytics, queryPaymentSalesSummary } from './data/aggregate/payment_method_analytics';
+import { queryTopReferrers, queryTrafficSourceConversion, queryVisitReferrer } from './data/aggregate/traffic_source_analytics';
+import { queryVisitMetricsByDevice, queryCheckoutFunnelMetrics, queryBrowserDeviceUsage, queryVisit } from './data/aggregate/visit_traffic_analytics';
+import { queryOcapiPerformance, queryScapiCacheMetrics, queryControllerPerformance } from './data/aggregate/technical_performance_analytics';
+import { querySourceCodeActivations, querySourceCodeSalesPerformance, queryCampaignROIAnalysis } from './data/aggregate/source_code_campaign_analytics';
 import { EnhancedQueryFunction, QueryMetadata } from './data/helpers';
 import { DateRange } from './data/types';
 
@@ -35,7 +43,35 @@ const availableQueries: EnhancedQueryFunction<any, any>[] = [
   // Recommendation Analytics
   queryRecommendationPerformanceByAlgorithm,
   queryOverallRecommendationPerformance,
-  queryRecommendationWidgetPlacement
+  queryRecommendationWidgetPlacement,
+  // Technical Analytics
+  queryOcapiRequests,
+  queryOcapiPerformance,
+  queryScapiCacheMetrics,
+  queryControllerPerformance,
+  // Sales Analytics
+  querySalesAnalytics,
+  querySalesSummary,
+  // Search Analytics
+  querySearchQueryPerformance,
+  queryFailedSearches,
+  querySearchConversion,
+  // Payment Analytics
+  queryPaymentMethodPerformance,
+  queryGiftCertificateAnalytics,
+  queryPaymentSalesSummary,
+  // Traffic Analytics
+  queryTopReferrers,
+  queryTrafficSourceConversion,
+  queryVisitReferrer,
+  queryVisitMetricsByDevice,
+  queryCheckoutFunnelMetrics,
+  queryBrowserDeviceUsage,
+  queryVisit,
+  // Campaign Analytics
+  querySourceCodeActivations,
+  querySourceCodeSalesPerformance,
+  queryCampaignROIAnalysis
 ];
 
 interface QueryDefinition {

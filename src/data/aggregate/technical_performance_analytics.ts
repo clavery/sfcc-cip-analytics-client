@@ -1,6 +1,14 @@
-import { CIPClient } from '../../cip-client';
-import { DateRange, formatDateForSQL, cleanSQL } from '../types';
-import { processFrame } from '../../utils';
+import { CIPClient } from "../../cip-client";
+import { DateRange, cleanSQL } from "../types";
+import {
+  SiteSpecificQueryTemplateParams,
+  formatDateRange,
+  executeQuery,
+  executeParameterizedQuery,
+  QueryTemplateParams,
+  validateRequiredParams,
+  EnhancedQueryFunction,
+} from "../helpers";
 
 export interface OcapiPerformance {
   request_date: Date | string;
@@ -41,79 +49,61 @@ export interface ControllerPerformance {
  * @param dateRange Date range to filter results
  * @param batchSize Size of each batch to yield (default: 100)
  */
-export async function* queryOcapiPerformance(
+export const queryOcapiPerformance: EnhancedQueryFunction<
+  OcapiPerformance,
+  SiteSpecificQueryTemplateParams
+> = function queryOcapiPerformance(
   client: CIPClient,
-  siteId: string,
-  dateRange: DateRange,
-  batchSize: number = 100
+  params: SiteSpecificQueryTemplateParams,
+  batchSize: number = 100,
 ): AsyncGenerator<OcapiPerformance[], void, unknown> {
-  const statementId = await client.createStatement();
+  const { sql, parameters } = queryOcapiPerformance.QUERY(params);
+  return executeParameterizedQuery<OcapiPerformance>(
+    client,
+    cleanSQL(sql),
+    parameters,
+    batchSize,
+  );
+};
 
-  try {
-    const startDateStr = formatDateForSQL(dateRange.startDate);
-    const endDateStr = formatDateForSQL(dateRange.endDate);
-    
-    const sql = cleanSQL(`
-      SELECT
-        o.request_date,
-        o.api_name,
-        o.api_resource,
-        SUM(o.num_requests) as total_requests,
-        SUM(o.response_time) as total_response_time,
-        CASE WHEN SUM(o.num_requests) > 0
-             THEN SUM(o.response_time) / SUM(o.num_requests)
-             ELSE 0 END as avg_response_time,
-        o.client_id
-      FROM ccdw_aggr_ocapi_request o
-      JOIN ccdw_dim_site s ON s.site_id = o.site_id
-      WHERE o.request_date >= '${startDateStr}' AND o.request_date <= '${endDateStr}'
-        AND s.nsite_id = '${siteId}'
-      GROUP BY o.request_date, o.api_name, o.api_resource, o.client_id
-      ORDER BY total_requests DESC
-    `);
+queryOcapiPerformance.metadata = {
+  name: "ocapi-performance",
+  description:
+    "Monitor OCAPI performance metrics and system health",
+  category: "Technical Analytics",
+  requiredParams: ["siteId", "from", "to"],
+};
 
-    const executeResponse = await client.execute(statementId, sql, batchSize);
-    
-    if (executeResponse.results && executeResponse.results.length > 0) {
-      const result = executeResponse.results[0];
-      
-      if (!result.firstFrame) {
-        return;
-      }
-      
-      const firstFrameData = processFrame<OcapiPerformance>(result.signature, result.firstFrame);
-      if (firstFrameData.length > 0) {
-        yield firstFrameData;
-      }
+queryOcapiPerformance.QUERY = (
+  params: SiteSpecificQueryTemplateParams,
+): { sql: string; parameters: any[] } => {
+  validateRequiredParams(params, ["siteId", "dateRange"]);
+  const { startDate, endDate } = formatDateRange(params.dateRange);
 
-      let done = result.firstFrame.done;
-      let currentFrame: typeof result.firstFrame | undefined = result.firstFrame;
+  const sql = `
+    SELECT
+      o.request_date,
+      o.api_name,
+      o.api_resource,
+      SUM(o.num_requests) as total_requests,
+      SUM(o.response_time) as total_response_time,
+      CASE WHEN SUM(o.num_requests) > 0
+           THEN SUM(o.response_time) / SUM(o.num_requests)
+           ELSE 0 END as avg_response_time,
+      o.client_id
+    FROM ccdw_aggr_ocapi_request o
+    JOIN ccdw_dim_site s ON s.site_id = o.site_id
+    WHERE o.request_date >= '${startDate}' AND o.request_date <= '${endDate}'
+      AND s.nsite_id = '${params.siteId}'
+    GROUP BY o.request_date, o.api_name, o.api_resource, o.client_id
+    ORDER BY total_requests DESC
+  `;
 
-      while (!done && currentFrame) {
-        const currentOffset = currentFrame.offset || 0;
-        const currentRowCount = currentFrame.rows?.length || 0;
-        
-        const nextResponse = await client.fetch(
-          result.statementId || 0,
-          currentOffset + currentRowCount,
-          batchSize
-        );
-        
-        currentFrame = nextResponse.frame;
-        if (!currentFrame) break;
-        
-        const nextData = processFrame<OcapiPerformance>(result.signature, currentFrame);
-        if (nextData.length > 0) {
-          yield nextData;
-        }
-        
-        done = currentFrame.done;
-      }
-    }
-  } finally {
-    await client.closeStatement(statementId);
-  }
-}
+  return {
+    sql,
+    parameters: [],
+  };
+};
 
 /**
  * Query SCAPI cache performance to optimize caching strategy
@@ -124,83 +114,64 @@ export async function* queryOcapiPerformance(
  * @param dateRange Date range to filter results
  * @param batchSize Size of each batch to yield (default: 100)
  */
-export async function* queryScapiCacheMetrics(
+export const queryScapiCacheMetrics: EnhancedQueryFunction<
+  ScapiCacheMetrics,
+  SiteSpecificQueryTemplateParams
+> = async function* queryScapiCacheMetrics(
   client: CIPClient,
-  siteId: string,
-  dateRange: DateRange,
-  batchSize: number = 100
+  params: SiteSpecificQueryTemplateParams,
+  batchSize: number = 100,
 ): AsyncGenerator<ScapiCacheMetrics[], void, unknown> {
-  const statementId = await client.createStatement();
+  const { sql, parameters } = queryScapiCacheMetrics.QUERY(params);
+  yield* executeParameterizedQuery<ScapiCacheMetrics>(
+    client,
+    cleanSQL(sql),
+    parameters,
+    batchSize,
+  );
+};
 
-  try {
-    const startDateStr = formatDateForSQL(dateRange.startDate);
-    const endDateStr = formatDateForSQL(dateRange.endDate);
-    
-    const sql = cleanSQL(`
-      SELECT
-        sc.request_date,
-        sc.api_family,
-        sc.api_name,
-        SUM(sc.num_requests) as total_requests,
-        SUM(sc.num_cached_requests) as cache_hits,
-        CASE WHEN SUM(sc.num_requests) > 0
-             THEN (CAST(SUM(sc.num_cached_requests) AS FLOAT) / SUM(sc.num_requests)) * 100
-             ELSE 0
-        END as cache_hit_rate,
-        CASE WHEN SUM(sc.num_requests) > 0
-             THEN SUM(sc.response_time) / SUM(sc.num_requests)
-             ELSE 0
-        END as avg_response_time
-      FROM ccdw_aggr_scapi_request sc
-      JOIN ccdw_dim_site s ON s.site_id = sc.site_id
-      WHERE sc.request_date >= '${startDateStr}' AND sc.request_date <= '${endDateStr}'
-        AND s.nsite_id = '${siteId}'
-      GROUP BY sc.request_date, sc.api_family, sc.api_name
-      ORDER BY total_requests DESC
-    `);
+queryScapiCacheMetrics.metadata = {
+  name: "scapi-cache-metrics",
+  description: "Analyze SCAPI cache performance and optimization opportunities",
+  category: "Technical Analytics",
+  requiredParams: ["siteId", "from", "to"],
+};
 
-    const executeResponse = await client.execute(statementId, sql, batchSize);
-    
-    if (executeResponse.results && executeResponse.results.length > 0) {
-      const result = executeResponse.results[0];
-      
-      if (!result.firstFrame) {
-        return;
-      }
-      
-      const firstFrameData = processFrame<ScapiCacheMetrics>(result.signature, result.firstFrame);
-      if (firstFrameData.length > 0) {
-        yield firstFrameData;
-      }
+queryScapiCacheMetrics.QUERY = (
+  params: SiteSpecificQueryTemplateParams,
+): { sql: string; parameters: any[] } => {
+  validateRequiredParams(params, ["siteId", "dateRange"]);
+  const { startDate, endDate } = formatDateRange(params.dateRange);
 
-      let done = result.firstFrame.done;
-      let currentFrame: typeof result.firstFrame | undefined = result.firstFrame;
+  const sql = `
+    SELECT
+      sc.request_date,
+      sc.api_family,
+      sc.api_name,
+      SUM(sc.num_requests) as total_requests,
+      SUM(sc.num_cached_requests) as cache_hits,
+      CASE WHEN SUM(sc.num_requests) > 0
+           THEN (CAST(SUM(sc.num_cached_requests) AS FLOAT) / SUM(sc.num_requests)) * 100
+           ELSE 0
+      END as cache_hit_rate,
+      CASE WHEN SUM(sc.num_requests) > 0
+           THEN SUM(sc.response_time) / SUM(sc.num_requests)
+           ELSE 0
+      END as avg_response_time
+    FROM ccdw_aggr_scapi_request sc
+    JOIN ccdw_dim_site s ON s.site_id = sc.site_id
+    WHERE sc.request_date >= '${startDate}' AND sc.request_date <= '${endDate}'
+      AND s.nsite_id = '${params.siteId}'
+    GROUP BY sc.request_date, sc.api_family, sc.api_name
+    ORDER BY total_requests DESC
+  `;
 
-      while (!done && currentFrame) {
-        const currentOffset = currentFrame.offset || 0;
-        const currentRowCount = currentFrame.rows?.length || 0;
-        
-        const nextResponse = await client.fetch(
-          result.statementId || 0,
-          currentOffset + currentRowCount,
-          batchSize
-        );
-        
-        currentFrame = nextResponse.frame;
-        if (!currentFrame) break;
-        
-        const nextData = processFrame<ScapiCacheMetrics>(result.signature, currentFrame);
-        if (nextData.length > 0) {
-          yield nextData;
-        }
-        
-        done = currentFrame.done;
-      }
-    }
-  } finally {
-    await client.closeStatement(statementId);
-  }
-}
+  return {
+    sql,
+    parameters: [],
+  };
+};
 
 /**
  * Query controller performance to identify slow pages
@@ -211,78 +182,59 @@ export async function* queryScapiCacheMetrics(
  * @param dateRange Date range to filter results
  * @param batchSize Size of each batch to yield (default: 100)
  */
-export async function* queryControllerPerformance(
+export const queryControllerPerformance: EnhancedQueryFunction<
+  ControllerPerformance,
+  SiteSpecificQueryTemplateParams
+> = async function* queryControllerPerformance(
   client: CIPClient,
-  siteId: string,
-  dateRange: DateRange,
-  batchSize: number = 100
+  params: SiteSpecificQueryTemplateParams,
+  batchSize: number = 100,
 ): AsyncGenerator<ControllerPerformance[], void, unknown> {
-  const statementId = await client.createStatement();
+  const { sql, parameters } = queryControllerPerformance.QUERY(params);
+  yield* executeParameterizedQuery<ControllerPerformance>(
+    client,
+    cleanSQL(sql),
+    parameters,
+    batchSize,
+  );
+};
 
-  try {
-    const startDateStr = formatDateForSQL(dateRange.startDate);
-    const endDateStr = formatDateForSQL(dateRange.endDate);
-    
-    const sql = cleanSQL(`
-      SELECT
-        cr.request_date,
-        cr.controller_name,
-        SUM(cr.num_requests) as total_requests,
-        CASE WHEN SUM(cr.num_requests) > 0
-             THEN SUM(cr.response_time) / SUM(cr.num_requests)
-             ELSE 0
-        END as avg_response_time,
-        SUM(cr.num_requests_bucket1 + cr.num_requests_bucket2) as requests_under_100ms,
-        SUM(cr.num_requests_bucket3 + cr.num_requests_bucket4 + cr.num_requests_bucket5) as requests_100_500ms,
-        SUM(cr.num_requests - cr.num_requests_bucket1 - cr.num_requests_bucket2 - 
-            cr.num_requests_bucket3 - cr.num_requests_bucket4 - cr.num_requests_bucket5) as requests_over_500ms
-      FROM ccdw_aggr_controller_request cr
-      JOIN ccdw_dim_site s ON s.site_id = cr.site_id
-      WHERE cr.request_date >= '${startDateStr}' AND cr.request_date <= '${endDateStr}'
-        AND s.nsite_id = '${siteId}'
-      GROUP BY cr.request_date, cr.controller_name
-      ORDER BY avg_response_time DESC
-    `);
+queryControllerPerformance.metadata = {
+  name: "controller-performance",
+  description: "Identify slow pages and controller performance bottlenecks",
+  category: "Technical Analytics",
+  requiredParams: ["siteId", "from", "to"],
+};
 
-    const executeResponse = await client.execute(statementId, sql, batchSize);
-    
-    if (executeResponse.results && executeResponse.results.length > 0) {
-      const result = executeResponse.results[0];
-      
-      if (!result.firstFrame) {
-        return;
-      }
-      
-      const firstFrameData = processFrame<ControllerPerformance>(result.signature, result.firstFrame);
-      if (firstFrameData.length > 0) {
-        yield firstFrameData;
-      }
+queryControllerPerformance.QUERY = (
+  params: SiteSpecificQueryTemplateParams,
+): { sql: string; parameters: any[] } => {
+  validateRequiredParams(params, ["siteId", "dateRange"]);
+  const { startDate, endDate } = formatDateRange(params.dateRange);
 
-      let done = result.firstFrame.done;
-      let currentFrame: typeof result.firstFrame | undefined = result.firstFrame;
+  const sql = `
+    SELECT
+      cr.request_date,
+      cr.controller_name,
+      SUM(cr.num_requests) as total_requests,
+      CASE WHEN SUM(cr.num_requests) > 0
+           THEN SUM(cr.response_time) / SUM(cr.num_requests)
+           ELSE 0
+      END as avg_response_time,
+      SUM(cr.num_requests_bucket1 + cr.num_requests_bucket2) as requests_under_100ms,
+      SUM(cr.num_requests_bucket3 + cr.num_requests_bucket4 + cr.num_requests_bucket5) as requests_100_500ms,
+      SUM(cr.num_requests - cr.num_requests_bucket1 - cr.num_requests_bucket2 - 
+          cr.num_requests_bucket3 - cr.num_requests_bucket4 - cr.num_requests_bucket5) as requests_over_500ms
+    FROM ccdw_aggr_controller_request cr
+    JOIN ccdw_dim_site s ON s.site_id = cr.site_id
+    WHERE cr.request_date >= '${startDate}' AND cr.request_date <= '${endDate}'
+      AND s.nsite_id = '${params.siteId}'
+    GROUP BY cr.request_date, cr.controller_name
+    ORDER BY avg_response_time DESC
+  `;
 
-      while (!done && currentFrame) {
-        const currentOffset = currentFrame.offset || 0;
-        const currentRowCount = currentFrame.rows?.length || 0;
-        
-        const nextResponse = await client.fetch(
-          result.statementId || 0,
-          currentOffset + currentRowCount,
-          batchSize
-        );
-        
-        currentFrame = nextResponse.frame;
-        if (!currentFrame) break;
-        
-        const nextData = processFrame<ControllerPerformance>(result.signature, currentFrame);
-        if (nextData.length > 0) {
-          yield nextData;
-        }
-        
-        done = currentFrame.done;
-      }
-    }
-  } finally {
-    await client.closeStatement(statementId);
-  }
-}
+  return {
+    sql,
+    parameters: [],
+  };
+};

@@ -1,6 +1,14 @@
-import { CIPClient } from '../../cip-client';
-import { DateRange, formatDateForSQL, cleanSQL } from '../types';
-import { processFrame } from '../../utils';
+import { CIPClient } from "../../cip-client";
+import { DateRange, cleanSQL } from "../types";
+import {
+  SiteSpecificQueryTemplateParams,
+  formatDateRange,
+  executeQuery,
+  executeParameterizedQuery,
+  QueryTemplateParams,
+  validateRequiredParams,
+  EnhancedQueryFunction,
+} from "../helpers";
 
 export interface PaymentSalesSummaryRecord {
   submit_date: Date | string;
@@ -43,78 +51,60 @@ export interface GiftCertificateAnalytics {
  * @param dateRange Date range to filter results
  * @param batchSize Size of each batch to yield (default: 100)
  */
-export async function* queryPaymentMethodPerformance(
+export const queryPaymentMethodPerformance: EnhancedQueryFunction<
+  PaymentMethodPerformance,
+  SiteSpecificQueryTemplateParams
+> = function queryPaymentMethodPerformance(
   client: CIPClient,
-  siteId: string,
-  dateRange: DateRange,
-  batchSize: number = 100
+  params: SiteSpecificQueryTemplateParams,
+  batchSize: number = 100,
 ): AsyncGenerator<PaymentMethodPerformance[], void, unknown> {
-  const statementId = await client.createStatement();
+  const { sql, parameters } = queryPaymentMethodPerformance.QUERY(params);
+  return executeParameterizedQuery<PaymentMethodPerformance>(
+    client,
+    cleanSQL(sql),
+    parameters,
+    batchSize,
+  );
+};
 
-  try {
-    const startDateStr = formatDateForSQL(dateRange.startDate);
-    const endDateStr = formatDateForSQL(dateRange.endDate);
-    
-    const sql = cleanSQL(`
-      SELECT
-        pm.display_name AS payment_method,
-        SUM(pss.num_payments) AS total_payments,
-        SUM(pss.num_orders) AS orders_with_payment,
-        SUM(pss.std_captured_amount) AS std_captured_amount,
-        SUM(pss.std_refunded_amount) AS std_refunded_amount,
-        SUM(pss.std_transaction_amount) AS std_transaction_amount,
-        (SUM(pss.std_captured_amount) / SUM(pss.num_payments)) AS avg_payment_amount
-      FROM ccdw_aggr_payment_sales_summary pss
-      JOIN ccdw_dim_payment_method pm ON pm.payment_method_id = pss.payment_method_id
-      JOIN ccdw_dim_site s ON s.site_id = pss.site_id
-      WHERE pss.submit_date >= '${startDateStr}' AND pss.submit_date <= '${endDateStr}'
-        AND s.nsite_id = '${siteId}'
-      GROUP BY pm.display_name
-      ORDER BY std_captured_amount DESC
-    `);
+queryPaymentMethodPerformance.metadata = {
+  name: "payment-method-performance",
+  description:
+    "Track payment method adoption and performance metrics",
+  category: "Payment Analytics",
+  requiredParams: ["siteId", "from", "to"],
+};
 
-    const executeResponse = await client.execute(statementId, sql, batchSize);
-    
-    if (executeResponse.results && executeResponse.results.length > 0) {
-      const result = executeResponse.results[0];
-      
-      if (!result.firstFrame) {
-        return;
-      }
-      
-      const firstFrameData = processFrame<PaymentMethodPerformance>(result.signature, result.firstFrame);
-      if (firstFrameData.length > 0) {
-        yield firstFrameData;
-      }
+queryPaymentMethodPerformance.QUERY = (
+  params: SiteSpecificQueryTemplateParams,
+): { sql: string; parameters: any[] } => {
+  validateRequiredParams(params, ["siteId", "dateRange"]);
+  const { startDate, endDate } = formatDateRange(params.dateRange);
 
-      let done = result.firstFrame.done;
-      let currentFrame: typeof result.firstFrame | undefined = result.firstFrame;
+  const sql = `
+    SELECT
+      pm.display_name AS payment_method,
+      SUM(pss.num_payments) AS total_payments,
+      SUM(pss.num_orders) AS orders_with_payment,
+      SUM(pss.std_captured_amount) AS std_captured_amount,
+      SUM(pss.std_refunded_amount) AS std_refunded_amount,
+      SUM(pss.std_transaction_amount) AS std_transaction_amount,
+      (SUM(pss.std_captured_amount) / SUM(pss.num_payments)) AS avg_payment_amount
+    FROM ccdw_aggr_payment_sales_summary pss
+    JOIN ccdw_dim_payment_method pm ON pm.payment_method_id = pss.payment_method_id
+    JOIN ccdw_dim_site s ON s.site_id = pss.site_id
+    WHERE pss.submit_date >= '${startDate}' AND pss.submit_date <= '${endDate}'
+      AND s.nsite_id = '${params.siteId}'
+    GROUP BY pm.display_name
+    ORDER BY std_captured_amount DESC
+  `;
 
-      while (!done && currentFrame) {
-        const currentOffset = currentFrame.offset || 0;
-        const currentRowCount = currentFrame.rows?.length || 0;
-        
-        const nextResponse = await client.fetch(
-          result.statementId || 0,
-          currentOffset + currentRowCount,
-          batchSize
-        );
-        
-        currentFrame = nextResponse.frame;
-        if (!currentFrame) break;
-        
-        const nextData = processFrame<PaymentMethodPerformance>(result.signature, currentFrame);
-        if (nextData.length > 0) {
-          yield nextData;
-        }
-        
-        done = currentFrame.done;
-      }
-    }
-  } finally {
-    await client.closeStatement(statementId);
-  }
-}
+  return {
+    sql,
+    parameters: [],
+  };
+};
 
 /**
  * Query gift certificate redemption patterns to optimize gift certificate marketing campaigns
@@ -125,82 +115,70 @@ export async function* queryPaymentMethodPerformance(
  * @param dateRange Date range to filter results
  * @param batchSize Size of each batch to yield (default: 100)
  */
-export async function* queryGiftCertificateAnalytics(
+export const queryGiftCertificateAnalytics: EnhancedQueryFunction<
+  GiftCertificateAnalytics,
+  SiteSpecificQueryTemplateParams
+> = async function* queryGiftCertificateAnalytics(
   client: CIPClient,
-  siteId: string,
-  dateRange: DateRange,
-  batchSize: number = 100
+  params: SiteSpecificQueryTemplateParams,
+  batchSize: number = 100,
 ): AsyncGenerator<GiftCertificateAnalytics[], void, unknown> {
-  const statementId = await client.createStatement();
+  const { sql, parameters } = queryGiftCertificateAnalytics.QUERY(params);
+  yield* executeParameterizedQuery<GiftCertificateAnalytics>(
+    client,
+    cleanSQL(sql),
+    parameters,
+    batchSize,
+  );
+};
 
-  try {
-    const startDateStr = formatDateForSQL(dateRange.startDate);
-    const endDateStr = formatDateForSQL(dateRange.endDate);
-    
-    const sql = cleanSQL(`
-      SELECT
-        pss.submit_date AS "date",
-        s.nsite_id AS site,
-        SUM(pss.num_orders) AS redemption_count,
-        SUM(pss.std_transaction_amount) AS std_redemption_value
-      FROM ccdw_aggr_payment_sales_summary pss
-      JOIN ccdw_dim_site s
-        ON s.site_id = pss.site_id
-      JOIN ccdw_dim_payment_method pm
-        ON pm.payment_method_id = pss.payment_method_id
-      WHERE pss.submit_date >= '${startDateStr}'
-        AND pss.submit_date <= '${endDateStr}'
-        AND s.nsite_id = '${siteId}'
-        AND pm.npayment_method_id = 'GIFT_CERTIFICATE'
-      GROUP BY
-        pss.submit_date,
-        s.nsite_id
-      ORDER BY
-        pss.submit_date ASC,
-        s.nsite_id ASC
-    `);
+queryGiftCertificateAnalytics.metadata = {
+  name: "gift-certificate-analytics",
+  description: "Analyze gift certificate redemption patterns and value",
+  category: "Payment Analytics",
+  requiredParams: ["siteId", "from", "to"],
+};
 
-    const executeResponse = await client.execute(statementId, sql, batchSize);
-    
-    if (executeResponse.results && executeResponse.results.length > 0) {
-      const result = executeResponse.results[0];
-      
-      if (!result.firstFrame) {
-        return;
-      }
-      
-      const firstFrameData = processFrame<GiftCertificateAnalytics>(result.signature, result.firstFrame);
-      if (firstFrameData.length > 0) {
-        yield firstFrameData;
-      }
+queryGiftCertificateAnalytics.QUERY = (
+  params: SiteSpecificQueryTemplateParams,
+): { sql: string; parameters: any[] } => {
+  validateRequiredParams(params, ["siteId", "dateRange"]);
+  const { startDate, endDate } = formatDateRange(params.dateRange);
 
-      let done = result.firstFrame.done;
-      let currentFrame: typeof result.firstFrame | undefined = result.firstFrame;
+  const sql = `
+    SELECT
+      pss.submit_date AS "date",
+      s.nsite_id AS site,
+      SUM(pss.num_orders) AS redemption_count,
+      SUM(pss.std_transaction_amount) AS std_redemption_value
+    FROM ccdw_aggr_payment_sales_summary pss
+    JOIN ccdw_dim_site s
+      ON s.site_id = pss.site_id
+    JOIN ccdw_dim_payment_method pm
+      ON pm.payment_method_id = pss.payment_method_id
+    WHERE pss.submit_date >= '${startDate}'
+      AND pss.submit_date <= '${endDate}'
+      AND s.nsite_id = '${params.siteId}'
+      AND pm.npayment_method_id = 'GIFT_CERTIFICATE'
+    GROUP BY
+      pss.submit_date,
+      s.nsite_id
+    ORDER BY
+      pss.submit_date ASC,
+      s.nsite_id ASC
+  `;
 
-      while (!done && currentFrame) {
-        const currentOffset = currentFrame.offset || 0;
-        const currentRowCount = currentFrame.rows?.length || 0;
-        
-        const nextResponse = await client.fetch(
-          result.statementId || 0,
-          currentOffset + currentRowCount,
-          batchSize
-        );
-        
-        currentFrame = nextResponse.frame;
-        if (!currentFrame) break;
-        
-        const nextData = processFrame<GiftCertificateAnalytics>(result.signature, currentFrame);
-        if (nextData.length > 0) {
-          yield nextData;
-        }
-        
-        done = currentFrame.done;
-      }
-    }
-  } finally {
-    await client.closeStatement(statementId);
-  }
+  return {
+    sql,
+    parameters: [],
+  };
+};
+
+interface PaymentSalesQueryParams extends QueryTemplateParams {
+  siteId?: string;
+  paymentMethodId?: string;
+  deviceClassCode?: string;
+  registered?: boolean;
 }
 
 /**
@@ -210,95 +188,79 @@ export async function* queryGiftCertificateAnalytics(
  * @param filters Optional filters for site, payment method, device, registration status
  * @param batchSize Size of each batch to yield (default: 100)
  */
-export async function* queryPaymentSalesSummary(
+export const queryPaymentSalesSummary: EnhancedQueryFunction<
+  PaymentSalesSummaryRecord,
+  PaymentSalesQueryParams
+> = async function* queryPaymentSalesSummary(
   client: CIPClient,
-  dateRange?: DateRange,
-  filters?: {
-    siteId?: string;
-    paymentMethodId?: string;
-    deviceClassCode?: string;
-    registered?: boolean;
-  },
-  batchSize: number = 100
+  params: PaymentSalesQueryParams,
+  batchSize: number = 100,
 ): AsyncGenerator<PaymentSalesSummaryRecord[], void, unknown> {
-  const statementId = await client.createStatement();
+  // Ensure dateRange has a default if not provided
+  const queryParams: PaymentSalesQueryParams = {
+    ...params,
+    dateRange: params.dateRange || { startDate: new Date(0), endDate: new Date() },
+  };
+  const { sql, parameters } = queryPaymentSalesSummary.QUERY(queryParams);
+  yield* executeParameterizedQuery<PaymentSalesSummaryRecord>(
+    client,
+    cleanSQL(sql),
+    parameters,
+    batchSize,
+  );
+};
 
-  try {
-    let sql = 'SELECT pss.* FROM ccdw_aggr_payment_sales_summary pss';
-    const joins: string[] = [];
-    const conditions: string[] = [];
-    
-    if (dateRange) {
-      const startDateStr = formatDateForSQL(dateRange.startDate);
-      const endDateStr = formatDateForSQL(dateRange.endDate);
-      conditions.push(`pss.submit_date >= '${startDateStr}' AND pss.submit_date <= '${endDateStr}'`);
-    }
-    
-    if (filters?.siteId) {
-      joins.push('JOIN ccdw_dim_site s ON s.site_id = pss.site_id');
-      conditions.push(`s.nsite_id = '${filters.siteId}'`);
-    }
-    
-    if (filters?.paymentMethodId) {
-      joins.push('JOIN ccdw_dim_payment_method pm ON pm.payment_method_id = pss.payment_method_id');
-      conditions.push(`pm.npayment_method_id = '${filters.paymentMethodId}'`);
-    }
-    
-    if (filters?.deviceClassCode) {
-      conditions.push(`pss.device_class_code = '${filters.deviceClassCode}'`);
-    }
-    
-    if (filters?.registered !== undefined) {
-      conditions.push(`pss.registered = ${filters.registered}`);
-    }
-    
-    if (joins.length > 0) {
-      sql += ' ' + joins.join(' ');
-    }
-    
-    if (conditions.length > 0) {
-      sql += ' WHERE ' + conditions.join(' AND ');
-    }
+queryPaymentSalesSummary.metadata = {
+  name: "payment-sales-summary-raw",
+  description: "Query raw payment sales summary data for custom analysis",
+  category: "Payment Analytics",
+  requiredParams: [],
+  optionalParams: ["siteId", "paymentMethodId", "deviceClassCode", "registered", "from", "to"],
+};
 
-    const executeResponse = await client.execute(statementId, cleanSQL(sql), batchSize);
-    
-    if (executeResponse.results && executeResponse.results.length > 0) {
-      const result = executeResponse.results[0];
-      
-      if (!result.firstFrame) {
-        return;
-      }
-      
-      const firstFrameData = processFrame<PaymentSalesSummaryRecord>(result.signature, result.firstFrame);
-      if (firstFrameData.length > 0) {
-        yield firstFrameData;
-      }
+queryPaymentSalesSummary.QUERY = (
+  params: PaymentSalesQueryParams,
+): { sql: string; parameters: any[] } => {
+  // dateRange is required in the params structure, even if it was optional in the function signature
+  validateRequiredParams(params, ["dateRange"]);
 
-      let done = result.firstFrame.done;
-      let currentFrame: typeof result.firstFrame | undefined = result.firstFrame;
+  let sql = "SELECT pss.* FROM ccdw_aggr_payment_sales_summary pss";
+  const joins: string[] = [];
+  const conditions: string[] = [];
 
-      while (!done && currentFrame) {
-        const currentOffset = currentFrame.offset || 0;
-        const currentRowCount = currentFrame.rows?.length || 0;
-        
-        const nextResponse = await client.fetch(
-          result.statementId || 0,
-          currentOffset + currentRowCount,
-          batchSize
-        );
-        
-        currentFrame = nextResponse.frame;
-        if (!currentFrame) break;
-        
-        const nextData = processFrame<PaymentSalesSummaryRecord>(result.signature, currentFrame);
-        if (nextData.length > 0) {
-          yield nextData;
-        }
-        
-        done = currentFrame.done;
-      }
-    }
-  } finally {
-    await client.closeStatement(statementId);
+  if (params.dateRange) {
+    const { startDate, endDate } = formatDateRange(params.dateRange);
+    conditions.push(`pss.submit_date >= '${startDate}' AND pss.submit_date <= '${endDate}'`);
   }
-}
+
+  if (params.siteId) {
+    joins.push("JOIN ccdw_dim_site s ON s.site_id = pss.site_id");
+    conditions.push(`s.nsite_id = '${params.siteId}'`);
+  }
+
+  if (params.paymentMethodId) {
+    joins.push("JOIN ccdw_dim_payment_method pm ON pm.payment_method_id = pss.payment_method_id");
+    conditions.push(`pm.npayment_method_id = '${params.paymentMethodId}'`);
+  }
+
+  if (params.deviceClassCode) {
+    conditions.push(`pss.device_class_code = '${params.deviceClassCode}'`);
+  }
+
+  if (params.registered !== undefined) {
+    conditions.push(`pss.registered = ${params.registered}`);
+  }
+
+  if (joins.length > 0) {
+    sql += " " + joins.join(" ");
+  }
+
+  if (conditions.length > 0) {
+    sql += " WHERE " + conditions.join(" AND ");
+  }
+
+  return {
+    sql,
+    parameters: [],
+  };
+};

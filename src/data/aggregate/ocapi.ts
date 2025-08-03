@@ -1,6 +1,13 @@
 import { CIPClient } from '../../cip-client';
-import { DateRange, formatDateForSQL } from '../types';
+import { DateRange, formatDateForSQL, cleanSQL } from '../types';
 import { processFrame } from '../../utils';
+import {
+  QueryTemplateParams,
+  formatDateRange,
+  executeParameterizedQuery,
+  validateRequiredParams,
+  EnhancedQueryFunction,
+} from '../helpers';
 
 export interface OcapiRequestRecord {
   request_date: Date | string;
@@ -28,70 +35,61 @@ export interface OcapiRequestRecord {
 
 /**
  * Query the ccdw_aggr_ocapi_request table with optional date filtering
- * Yields batches of records as they are fetched from the server
+ * Business Question: How are our APIs performing in terms of response times and request volumes?
+ * Primary users: Technical teams, Operations
  * @param client The Avatica client instance (must have an open connection)
- * @param dateRange Optional date range to filter results by request_date
+ * @param params Query parameters including optional date range
  * @param batchSize Size of each batch to yield (default: 100)
  */
-export async function* queryOcapiRequests(
+export const queryOcapiRequests: EnhancedQueryFunction<
+  OcapiRequestRecord,
+  QueryTemplateParams
+> = async function* queryOcapiRequests(
   client: CIPClient,
-  dateRange?: DateRange,
+  params: QueryTemplateParams,
   batchSize: number = 100
 ): AsyncGenerator<OcapiRequestRecord[], void, unknown> {
-  const statementId = await client.createStatement();
+  // Ensure dateRange has a default if not provided
+  const queryParams: QueryTemplateParams = {
+    ...params,
+    dateRange: params.dateRange || { startDate: new Date(0), endDate: new Date() },
+  };
+  const { sql, parameters } = queryOcapiRequests.QUERY(queryParams);
+  yield* executeParameterizedQuery<OcapiRequestRecord>(
+    client,
+    cleanSQL(sql),
+    parameters,
+    batchSize,
+  );
+};
 
-  try {
-    let sql = 'SELECT * FROM ccdw_aggr_ocapi_request';
-    
-    if (dateRange) {
-      // Format dates as YYYY-MM-DD for SQL
-      const startDateStr = formatDateForSQL(dateRange.startDate);
-      const endDateStr = formatDateForSQL(dateRange.endDate);
-      
-      sql += ` WHERE request_date >= '${startDateStr}' AND request_date <= '${endDateStr}'`;
-    }
+queryOcapiRequests.metadata = {
+  name: "ocapi-requests",
+  description: "Analyze API performance including response times and request volumes",
+  category: "Technical Analytics",
+  requiredParams: [],
+  optionalParams: ["from", "to"],
+};
 
-    const executeResponse = await client.execute(statementId, sql, batchSize);
-    
-    if (executeResponse.results && executeResponse.results.length > 0) {
-      const result = executeResponse.results[0];
-      
-      if (!result.firstFrame) {
-        return;
-      }
-      
-      // Yield the first frame data
-      const firstFrameData = processFrame<OcapiRequestRecord>(result.signature, result.firstFrame);
-      if (firstFrameData.length > 0) {
-        yield firstFrameData;
-      }
+queryOcapiRequests.QUERY = (
+  params: QueryTemplateParams,
+): { sql: string; parameters: any[] } => {
+  validateRequiredParams(params, ["dateRange"]);
 
-      let done = result.firstFrame.done;
-      let currentFrame: typeof result.firstFrame | undefined = result.firstFrame;
+  let sql = "SELECT * FROM ccdw_aggr_ocapi_request";
+  const conditions: string[] = [];
 
-      // Fetch and yield additional frames
-      while (!done && currentFrame) {
-        const currentOffset = currentFrame.offset || 0;
-        const currentRowCount = currentFrame.rows?.length || 0;
-        
-        const nextResponse = await client.fetch(
-          result.statementId || 0,
-          currentOffset + currentRowCount,
-          batchSize
-        );
-        
-        currentFrame = nextResponse.frame;
-        if (!currentFrame) break;
-        
-        const nextData = processFrame<OcapiRequestRecord>(result.signature, currentFrame);
-        if (nextData.length > 0) {
-          yield nextData;
-        }
-        
-        done = currentFrame.done;
-      }
-    }
-  } finally {
-    await client.closeStatement(statementId);
+  if (params.dateRange) {
+    const { startDate, endDate } = formatDateRange(params.dateRange);
+    conditions.push(`request_date >= '${startDate}' AND request_date <= '${endDate}'`);
   }
-}
+
+  if (conditions.length > 0) {
+    sql += " WHERE " + conditions.join(" AND ");
+  }
+
+  return {
+    sql,
+    parameters: [],
+  };
+};

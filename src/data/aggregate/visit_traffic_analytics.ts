@@ -1,6 +1,14 @@
-import { CIPClient } from '../../cip-client';
-import { DateRange, formatDateForSQL, cleanSQL } from '../types';
-import { processFrame } from '../../utils';
+import { CIPClient } from "../../cip-client";
+import { DateRange, cleanSQL } from "../types";
+import {
+  SiteSpecificQueryTemplateParams,
+  formatDateRange,
+  executeQuery,
+  executeParameterizedQuery,
+  QueryTemplateParams,
+  validateRequiredParams,
+  EnhancedQueryFunction,
+} from "../helpers";
 
 export interface VisitRecord {
   visit_date: Date | string;
@@ -47,86 +55,68 @@ export interface CheckoutFunnelMetrics {
  * @param dateRange Date range to filter results
  * @param batchSize Size of each batch to yield (default: 100)
  */
-export async function* queryVisitMetricsByDevice(
+export const queryVisitMetricsByDevice: EnhancedQueryFunction<
+  VisitMetricsByDevice,
+  SiteSpecificQueryTemplateParams
+> = function queryVisitMetricsByDevice(
   client: CIPClient,
-  siteId: string,
-  dateRange: DateRange,
-  batchSize: number = 100
+  params: SiteSpecificQueryTemplateParams,
+  batchSize: number = 100,
 ): AsyncGenerator<VisitMetricsByDevice[], void, unknown> {
-  const statementId = await client.createStatement();
+  const { sql, parameters } = queryVisitMetricsByDevice.QUERY(params);
+  return executeParameterizedQuery<VisitMetricsByDevice>(
+    client,
+    cleanSQL(sql),
+    parameters,
+    batchSize,
+  );
+};
 
-  try {
-    const startDateStr = formatDateForSQL(dateRange.startDate);
-    const endDateStr = formatDateForSQL(dateRange.endDate);
-    
-    const sql = cleanSQL(`
-      SELECT
-        v.visit_date AS visit_dt,
-        v.device_class_code,
-        SUM(v.num_visits) AS visits,
-        SUM(v.num_converted_visits) AS converted_visits,
-        SUM(v.visit_duration) AS total_duration,
-        SUM(v.std_revenue) AS std_revenue,
-        CASE WHEN SUM(v.num_visits) > 0
-             THEN SUM(v.std_revenue) / SUM(v.num_visits)
-             ELSE 0
-        END AS revenue_per_visit
-      FROM ccdw_aggr_visit v
-      JOIN ccdw_dim_site s
-        ON s.site_id = v.site_id
-      WHERE v.visit_date >= '${startDateStr}'
-        AND v.visit_date <= '${endDateStr}'
-        AND s.nsite_id = '${siteId}'
-      GROUP BY
-        v.visit_date,
-        v.device_class_code
-      ORDER BY
-        v.visit_date,
-        v.device_class_code
-    `);
+queryVisitMetricsByDevice.metadata = {
+  name: "visit-metrics-by-device",
+  description:
+    "Analyze visit patterns and performance metrics by device type",
+  category: "Traffic Analytics",
+  requiredParams: ["siteId", "from", "to"],
+};
 
-    const executeResponse = await client.execute(statementId, sql, batchSize);
-    
-    if (executeResponse.results && executeResponse.results.length > 0) {
-      const result = executeResponse.results[0];
-      
-      if (!result.firstFrame) {
-        return;
-      }
-      
-      const firstFrameData = processFrame<VisitMetricsByDevice>(result.signature, result.firstFrame);
-      if (firstFrameData.length > 0) {
-        yield firstFrameData;
-      }
+queryVisitMetricsByDevice.QUERY = (
+  params: SiteSpecificQueryTemplateParams,
+): { sql: string; parameters: any[] } => {
+  validateRequiredParams(params, ["siteId", "dateRange"]);
+  const { startDate, endDate } = formatDateRange(params.dateRange);
 
-      let done = result.firstFrame.done;
-      let currentFrame: typeof result.firstFrame | undefined = result.firstFrame;
+  const sql = `
+    SELECT
+      v.visit_date AS visit_dt,
+      v.device_class_code,
+      SUM(v.num_visits) AS visits,
+      SUM(v.num_converted_visits) AS converted_visits,
+      SUM(v.visit_duration) AS total_duration,
+      SUM(v.std_revenue) AS std_revenue,
+      CASE WHEN SUM(v.num_visits) > 0
+           THEN SUM(v.std_revenue) / SUM(v.num_visits)
+           ELSE 0
+      END AS revenue_per_visit
+    FROM ccdw_aggr_visit v
+    JOIN ccdw_dim_site s
+      ON s.site_id = v.site_id
+    WHERE v.visit_date >= '${startDate}'
+      AND v.visit_date <= '${endDate}'
+      AND s.nsite_id = '${params.siteId}'
+    GROUP BY
+      v.visit_date,
+      v.device_class_code
+    ORDER BY
+      v.visit_date,
+      v.device_class_code
+  `;
 
-      while (!done && currentFrame) {
-        const currentOffset = currentFrame.offset || 0;
-        const currentRowCount = currentFrame.rows?.length || 0;
-        
-        const nextResponse = await client.fetch(
-          result.statementId || 0,
-          currentOffset + currentRowCount,
-          batchSize
-        );
-        
-        currentFrame = nextResponse.frame;
-        if (!currentFrame) break;
-        
-        const nextData = processFrame<VisitMetricsByDevice>(result.signature, currentFrame);
-        if (nextData.length > 0) {
-          yield nextData;
-        }
-        
-        done = currentFrame.done;
-      }
-    }
-  } finally {
-    await client.closeStatement(statementId);
-  }
-}
+  return {
+    sql,
+    parameters: [],
+  };
+};
 
 /**
  * Query checkout funnel metrics to identify abandonment points
@@ -137,92 +127,86 @@ export async function* queryVisitMetricsByDevice(
  * @param dateRange Date range to filter results
  * @param batchSize Size of each batch to yield (default: 100)
  */
-export async function* queryCheckoutFunnelMetrics(
+export const queryCheckoutFunnelMetrics: EnhancedQueryFunction<
+  CheckoutFunnelMetrics,
+  SiteSpecificQueryTemplateParams
+> = async function* queryCheckoutFunnelMetrics(
   client: CIPClient,
-  siteId: string,
-  dateRange: DateRange,
-  batchSize: number = 100
+  params: SiteSpecificQueryTemplateParams,
+  batchSize: number = 100,
 ): AsyncGenerator<CheckoutFunnelMetrics[], void, unknown> {
-  const statementId = await client.createStatement();
+  const { sql, parameters } = queryCheckoutFunnelMetrics.QUERY(params);
+  yield* executeParameterizedQuery<CheckoutFunnelMetrics>(
+    client,
+    cleanSQL(sql),
+    parameters,
+    batchSize,
+  );
+};
 
-  try {
-    const startDateStr = formatDateForSQL(dateRange.startDate);
-    const endDateStr = formatDateForSQL(dateRange.endDate);
-    
-    const sql = cleanSQL(`
-      WITH funnel_data AS (
-        SELECT
-          cs.step_name,
-          cs.step_id,
-          SUM(vc.num_visits) as step_visits,
-          SUM(vc.num_abandonments) as step_abandonments,
-          LAG(SUM(vc.num_visits), 1) OVER (ORDER BY cs.step_id) as prev_step_visits
-        FROM ccdw_aggr_visit_checkout vc
-        JOIN ccdw_dim_checkout_step cs ON cs.checkout_step_id = vc.checkout_step_id
-        JOIN ccdw_dim_site s ON s.site_id = vc.site_id
-        WHERE vc.visit_date >= '${startDateStr}'
-          AND vc.visit_date <= '${endDateStr}'
-          AND s.nsite_id = '${siteId}'
-        GROUP BY cs.step_name, cs.step_id
-      )
+queryCheckoutFunnelMetrics.metadata = {
+  name: "checkout-funnel-metrics",
+  description: "Analyze checkout process abandonment points and conversion rates",
+  category: "Traffic Analytics",
+  requiredParams: ["siteId", "from", "to"],
+};
+
+queryCheckoutFunnelMetrics.QUERY = (
+  params: SiteSpecificQueryTemplateParams,
+): { sql: string; parameters: any[] } => {
+  validateRequiredParams(params, ["siteId", "dateRange"]);
+  const { startDate, endDate } = formatDateRange(params.dateRange);
+
+  const sql = `
+    WITH funnel_data AS (
       SELECT
-        step_name,
-        step_id as step_sequence,
-        step_visits as num_visits,
-        step_abandonments as num_abandonments,
-        CASE WHEN step_visits > 0
-             THEN (CAST(step_abandonments AS FLOAT) / step_visits) * 100
-             ELSE 0
-        END as abandonment_rate,
-        CASE WHEN prev_step_visits > 0
-             THEN (CAST(step_visits AS FLOAT) / prev_step_visits) * 100
-             ELSE 100
-        END as conversion_to_next_step
-      FROM funnel_data
-      ORDER BY step_id
-    `);
+        cs.step_name,
+        cs.step_id,
+        SUM(vc.num_visits) as step_visits,
+        SUM(vc.num_abandonments) as step_abandonments,
+        LAG(SUM(vc.num_visits), 1) OVER (ORDER BY cs.step_id) as prev_step_visits
+      FROM ccdw_aggr_visit_checkout vc
+      JOIN ccdw_dim_checkout_step cs ON cs.checkout_step_id = vc.checkout_step_id
+      JOIN ccdw_dim_site s ON s.site_id = vc.site_id
+      WHERE vc.visit_date >= '${startDate}'
+        AND vc.visit_date <= '${endDate}'
+        AND s.nsite_id = '${params.siteId}'
+      GROUP BY cs.step_name, cs.step_id
+    )
+    SELECT
+      step_name,
+      step_id as step_sequence,
+      step_visits as num_visits,
+      step_abandonments as num_abandonments,
+      CASE WHEN step_visits > 0
+           THEN (CAST(step_abandonments AS FLOAT) / step_visits) * 100
+           ELSE 0
+      END as abandonment_rate,
+      CASE WHEN prev_step_visits > 0
+           THEN (CAST(step_visits AS FLOAT) / prev_step_visits) * 100
+           ELSE 100
+      END as conversion_to_next_step
+    FROM funnel_data
+    ORDER BY step_id
+  `;
 
-    const executeResponse = await client.execute(statementId, sql, batchSize);
-    
-    if (executeResponse.results && executeResponse.results.length > 0) {
-      const result = executeResponse.results[0];
-      
-      if (!result.firstFrame) {
-        return;
-      }
-      
-      const firstFrameData = processFrame<CheckoutFunnelMetrics>(result.signature, result.firstFrame);
-      if (firstFrameData.length > 0) {
-        yield firstFrameData;
-      }
+  return {
+    sql,
+    parameters: [],
+  };
+};
 
-      let done = result.firstFrame.done;
-      let currentFrame: typeof result.firstFrame | undefined = result.firstFrame;
+export interface BrowserDeviceUsage {
+  browser: string;
+  browser_version: string;
+  os: string;
+  device_type: string;
+  visit_count: number;
+  revenue_share: number;
+}
 
-      while (!done && currentFrame) {
-        const currentOffset = currentFrame.offset || 0;
-        const currentRowCount = currentFrame.rows?.length || 0;
-        
-        const nextResponse = await client.fetch(
-          result.statementId || 0,
-          currentOffset + currentRowCount,
-          batchSize
-        );
-        
-        currentFrame = nextResponse.frame;
-        if (!currentFrame) break;
-        
-        const nextData = processFrame<CheckoutFunnelMetrics>(result.signature, currentFrame);
-        if (nextData.length > 0) {
-          yield nextData;
-        }
-        
-        done = currentFrame.done;
-      }
-    }
-  } finally {
-    await client.closeStatement(statementId);
-  }
+interface BrowserDeviceUsageParams extends SiteSpecificQueryTemplateParams {
+  limit?: number;
 }
 
 /**
@@ -235,97 +219,78 @@ export async function* queryCheckoutFunnelMetrics(
  * @param limit Maximum number of user agents to return (default: 50)
  * @param batchSize Size of each batch to yield (default: 100)
  */
-export async function* queryBrowserDeviceUsage(
+export const queryBrowserDeviceUsage: EnhancedQueryFunction<
+  BrowserDeviceUsage,
+  BrowserDeviceUsageParams
+> = async function* queryBrowserDeviceUsage(
   client: CIPClient,
-  siteId: string,
-  dateRange: DateRange,
-  limit: number = 50,
-  batchSize: number = 100
-): AsyncGenerator<{
-  browser: string;
-  browser_version: string;
-  os: string;
-  device_type: string;
-  visit_count: number;
-  revenue_share: number;
-}[], void, unknown> {
-  const statementId = await client.createStatement();
+  params: BrowserDeviceUsageParams,
+  batchSize: number = 100,
+): AsyncGenerator<BrowserDeviceUsage[], void, unknown> {
+  const { sql, parameters } = queryBrowserDeviceUsage.QUERY(params);
+  yield* executeParameterizedQuery<BrowserDeviceUsage>(
+    client,
+    cleanSQL(sql),
+    parameters,
+    batchSize,
+  );
+};
 
-  try {
-    const startDateStr = formatDateForSQL(dateRange.startDate);
-    const endDateStr = formatDateForSQL(dateRange.endDate);
-    
-    const sql = cleanSQL(`
-      WITH total_revenue AS (
-        SELECT SUM(std_revenue) as total_rev
-        FROM ccdw_aggr_visit_user_agent
-        WHERE visit_date >= '${startDateStr}'
-          AND visit_date <= '${endDateStr}'
-      )
-      SELECT
-        vua.browser,
-        vua.browser_version,
-        vua.os,
-        vua.device_type,
-        SUM(vua.num_visits) as visit_count,
-        (SUM(vua.std_revenue) / total.total_rev) * 100 as revenue_share
-      FROM ccdw_aggr_visit_user_agent vua
-      JOIN ccdw_dim_site s ON s.site_id = vua.site_id
-      JOIN total_revenue total ON TRUE
-      WHERE vua.visit_date >= '${startDateStr}'
-        AND vua.visit_date <= '${endDateStr}'
-        AND s.nsite_id = '${siteId}'
-      GROUP BY
-        vua.browser,
-        vua.browser_version,
-        vua.os,
-        vua.device_type,
-        total.total_rev
-      ORDER BY visit_count DESC
-      LIMIT ${limit}
-    `);
+queryBrowserDeviceUsage.metadata = {
+  name: "browser-device-usage",
+  description: "Analyze browser and device usage patterns for UX optimization",
+  category: "Traffic Analytics",
+  requiredParams: ["siteId", "from", "to"],
+  optionalParams: ["limit"],
+};
 
-    const executeResponse = await client.execute(statementId, sql, batchSize);
-    
-    if (executeResponse.results && executeResponse.results.length > 0) {
-      const result = executeResponse.results[0];
-      
-      if (!result.firstFrame) {
-        return;
-      }
-      
-      const firstFrameData = processFrame<any>(result.signature, result.firstFrame);
-      if (firstFrameData.length > 0) {
-        yield firstFrameData;
-      }
+queryBrowserDeviceUsage.QUERY = (
+  params: BrowserDeviceUsageParams,
+): { sql: string; parameters: any[] } => {
+  validateRequiredParams(params, ["siteId", "dateRange"]);
+  const { startDate, endDate } = formatDateRange(params.dateRange);
+  const limit = params.limit || 50;
 
-      let done = result.firstFrame.done;
-      let currentFrame: typeof result.firstFrame | undefined = result.firstFrame;
+  const sql = `
+    WITH total_revenue AS (
+      SELECT SUM(std_revenue) as total_rev
+      FROM ccdw_aggr_visit_user_agent
+      WHERE visit_date >= '${startDate}'
+        AND visit_date <= '${endDate}'
+    )
+    SELECT
+      vua.browser,
+      vua.browser_version,
+      vua.os,
+      vua.device_type,
+      SUM(vua.num_visits) as visit_count,
+      (SUM(vua.std_revenue) / total.total_rev) * 100 as revenue_share
+    FROM ccdw_aggr_visit_user_agent vua
+    JOIN ccdw_dim_site s ON s.site_id = vua.site_id
+    JOIN total_revenue total ON TRUE
+    WHERE vua.visit_date >= '${startDate}'
+      AND vua.visit_date <= '${endDate}'
+      AND s.nsite_id = '${params.siteId}'
+    GROUP BY
+      vua.browser,
+      vua.browser_version,
+      vua.os,
+      vua.device_type,
+      total.total_rev
+    ORDER BY visit_count DESC
+    LIMIT ${limit}
+  `;
 
-      while (!done && currentFrame) {
-        const currentOffset = currentFrame.offset || 0;
-        const currentRowCount = currentFrame.rows?.length || 0;
-        
-        const nextResponse = await client.fetch(
-          result.statementId || 0,
-          currentOffset + currentRowCount,
-          batchSize
-        );
-        
-        currentFrame = nextResponse.frame;
-        if (!currentFrame) break;
-        
-        const nextData = processFrame<any>(result.signature, currentFrame);
-        if (nextData.length > 0) {
-          yield nextData;
-        }
-        
-        done = currentFrame.done;
-      }
-    }
-  } finally {
-    await client.closeStatement(statementId);
-  }
+  return {
+    sql,
+    parameters: [],
+  };
+};
+
+interface VisitQueryParams extends QueryTemplateParams {
+  siteId?: string;
+  deviceClassCode?: string;
+  registered?: boolean;
 }
 
 /**
@@ -335,89 +300,74 @@ export async function* queryBrowserDeviceUsage(
  * @param filters Optional filters for site, device, registration status
  * @param batchSize Size of each batch to yield (default: 100)
  */
-export async function* queryVisit(
+export const queryVisit: EnhancedQueryFunction<
+  VisitRecord,
+  VisitQueryParams
+> = async function* queryVisit(
   client: CIPClient,
-  dateRange?: DateRange,
-  filters?: {
-    siteId?: string;
-    deviceClassCode?: string;
-    registered?: boolean;
-  },
-  batchSize: number = 100
+  params: VisitQueryParams,
+  batchSize: number = 100,
 ): AsyncGenerator<VisitRecord[], void, unknown> {
-  const statementId = await client.createStatement();
+  // Ensure dateRange has a default if not provided
+  const queryParams: VisitQueryParams = {
+    ...params,
+    dateRange: params.dateRange || { startDate: new Date(0), endDate: new Date() },
+  };
+  const { sql, parameters } = queryVisit.QUERY(queryParams);
+  yield* executeParameterizedQuery<VisitRecord>(
+    client,
+    cleanSQL(sql),
+    parameters,
+    batchSize,
+  );
+};
 
-  try {
-    let sql = 'SELECT v.* FROM ccdw_aggr_visit v';
-    const joins: string[] = [];
-    const conditions: string[] = [];
-    
-    if (dateRange) {
-      const startDateStr = formatDateForSQL(dateRange.startDate);
-      const endDateStr = formatDateForSQL(dateRange.endDate);
-      conditions.push(`v.visit_date >= '${startDateStr}' AND v.visit_date <= '${endDateStr}'`);
-    }
-    
-    if (filters?.siteId) {
-      joins.push('JOIN ccdw_dim_site s ON s.site_id = v.site_id');
-      conditions.push(`s.nsite_id = '${filters.siteId}'`);
-    }
-    
-    if (filters?.deviceClassCode) {
-      conditions.push(`v.device_class_code = '${filters.deviceClassCode}'`);
-    }
-    
-    if (filters?.registered !== undefined) {
-      conditions.push(`v.registered = ${filters.registered}`);
-    }
-    
-    if (joins.length > 0) {
-      sql += ' ' + joins.join(' ');
-    }
-    
-    if (conditions.length > 0) {
-      sql += ' WHERE ' + conditions.join(' AND ');
-    }
+queryVisit.metadata = {
+  name: "visit-raw",
+  description: "Query raw visit data for custom analysis",
+  category: "Traffic Analytics",
+  requiredParams: [],
+  optionalParams: ["siteId", "deviceClassCode", "registered", "from", "to"],
+};
 
-    const executeResponse = await client.execute(statementId, cleanSQL(sql), batchSize);
-    
-    if (executeResponse.results && executeResponse.results.length > 0) {
-      const result = executeResponse.results[0];
-      
-      if (!result.firstFrame) {
-        return;
-      }
-      
-      const firstFrameData = processFrame<VisitRecord>(result.signature, result.firstFrame);
-      if (firstFrameData.length > 0) {
-        yield firstFrameData;
-      }
+queryVisit.QUERY = (
+  params: VisitQueryParams,
+): { sql: string; parameters: any[] } => {
+  // dateRange is required in the params structure, even if it was optional in the function signature
+  validateRequiredParams(params, ["dateRange"]);
 
-      let done = result.firstFrame.done;
-      let currentFrame: typeof result.firstFrame | undefined = result.firstFrame;
+  let sql = "SELECT v.* FROM ccdw_aggr_visit v";
+  const joins: string[] = [];
+  const conditions: string[] = [];
 
-      while (!done && currentFrame) {
-        const currentOffset = currentFrame.offset || 0;
-        const currentRowCount = currentFrame.rows?.length || 0;
-        
-        const nextResponse = await client.fetch(
-          result.statementId || 0,
-          currentOffset + currentRowCount,
-          batchSize
-        );
-        
-        currentFrame = nextResponse.frame;
-        if (!currentFrame) break;
-        
-        const nextData = processFrame<VisitRecord>(result.signature, currentFrame);
-        if (nextData.length > 0) {
-          yield nextData;
-        }
-        
-        done = currentFrame.done;
-      }
-    }
-  } finally {
-    await client.closeStatement(statementId);
+  if (params.dateRange) {
+    const { startDate, endDate } = formatDateRange(params.dateRange);
+    conditions.push(`v.visit_date >= '${startDate}' AND v.visit_date <= '${endDate}'`);
   }
-}
+
+  if (params.siteId) {
+    joins.push("JOIN ccdw_dim_site s ON s.site_id = v.site_id");
+    conditions.push(`s.nsite_id = '${params.siteId}'`);
+  }
+
+  if (params.deviceClassCode) {
+    conditions.push(`v.device_class_code = '${params.deviceClassCode}'`);
+  }
+
+  if (params.registered !== undefined) {
+    conditions.push(`v.registered = ${params.registered}`);
+  }
+
+  if (joins.length > 0) {
+    sql += " " + joins.join(" ");
+  }
+
+  if (conditions.length > 0) {
+    sql += " WHERE " + conditions.join(" AND ");
+  }
+
+  return {
+    sql,
+    parameters: [],
+  };
+};

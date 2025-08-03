@@ -17,7 +17,6 @@ import {
 } from "./normalized-types";
 import * as path from "path";
 import { Logger, defaultLogger } from "./logger";
-import Long from "long";
 
 interface TokenInfo {
   accessToken: string;

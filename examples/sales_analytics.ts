@@ -40,8 +40,10 @@ async function main() {
 
     const salesQuery = querySalesAnalytics(
       client,
-      siteId,
-      { startDate, endDate },
+      {
+        siteId,
+        dateRange: { startDate, endDate }
+      },
       50,
     );
 
@@ -105,8 +107,10 @@ async function main() {
 
     const rawSalesQuery = querySalesSummary(
       client,
-      { startDate: recentStartDate, endDate: recentEndDate },
-      { siteId },
+      {
+        dateRange: { startDate: recentStartDate, endDate: recentEndDate },
+        siteId
+      },
       100,
     );
 
