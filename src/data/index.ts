@@ -2,5 +2,3 @@
 export * from './types';
 export * from './helpers';
 export * from './aggregate';
-export * from './dim';
-export * from './fact';

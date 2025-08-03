@@ -46,15 +46,12 @@ export async function* executeQuery<T>(
       debugger;
       const firstFrameData = processFrame<T>(result.signature || undefined, result.firstFrame);
       if (firstFrameData.length > 0) {
-        console.log(`Yielding first frame with ${firstFrameData.length} records`);
         yield firstFrameData;
       }
 
-      console.log(result, result.signature);
       let done = result.firstFrame.done;
       let currentFrame: typeof result.firstFrame | undefined = result.firstFrame;
 
-      console.log(`First frame done: ${done}, offset: ${currentFrame.offset}, rows: ${currentFrame.rows?.length}`);
       while (!done && currentFrame) {
         const currentOffset = currentFrame.offset || 0;
         const currentRowCount = currentFrame.rows?.length || 0;
@@ -99,7 +96,6 @@ export async function* executeParameterizedQuery<T>(
       
       const firstFrameData = processFrame<T>(result.signature || undefined, result.firstFrame);
       if (firstFrameData.length > 0) {
-        console.log(`Yielding first frame with ${firstFrameData.length} records`);
         yield firstFrameData;
       }
 
