@@ -2,6 +2,9 @@
 
 This document contains examples of business-specific query functions available in the CIP Analytics Client. These queries are designed to answer common business questions and are built on top of the low-level CIPClient.
 
+> [!NOTE]  
+> These queries are examples and may not always return useful data. They are intended to be examples of code usage and how to adapt them in your application.
+
 ## Common Setup
 
 All business queries require a connected CIPClient instance:
