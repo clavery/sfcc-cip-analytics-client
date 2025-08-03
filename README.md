@@ -66,7 +66,8 @@ cip-query sql "SELECT * FROM ccdw_aggr_ocapi_request LIMIT 10"
 #### `query` - Execute predefined business object queries
 
 ```bash
-cip-query query ocapi-requests --from "2024-01-01" --to "2024-01-31"
+cip-query query --list
+cip-query query --name ocapi-requests --from "2024-01-01" --to "2024-01-31"
 ```
 
 ### Basic Query
@@ -168,8 +169,7 @@ async function analyzeSalesData() {
   
   const query = querySalesAnalytics(
     client,
-    'mysite', // site ID
-    { startDate: new Date('2024-01-01'), endDate: new Date('2024-01-31') },
+    { siteId: 'Sites-RefArch-Site', startDate: new Date('2024-01-01'), endDate: new Date('2024-01-31') },
     100 // batch size
   );
   
@@ -194,7 +194,6 @@ See the [`examples/`](./examples/) directory for complete working examples:
 ### Prerequisites
 
 - Node.js 18+ or Bun
-- TypeScript knowledge
 - SFCC Commerce Cloud production access with CIP Analytics enabled
 
 ### Getting Started
@@ -236,15 +235,18 @@ new CIPClient(clientId: string, clientSecret: string, instance: string, options?
 - `closeStatement(statementId: number): Promise<void>` - Close a statement
 - `execute(statementId: number, sql: string, maxRowCount?: number): Promise<NormalizedExecuteResponse>` - Execute SQL query
 - `fetch(statementId: number, offset: number, fetchMaxRowCount: number): Promise<NormalizedFetchResponse>` - Fetch more results
+- `prepare(sql: string, maxRowsTotal?: number): Promise<IPrepareResponse>` - Prepare a SQL statement with parameter placeholders
+- `executeWithParameters(statementHandle: IStatementHandle, parameters?: any[], firstFrameMaxSize?: number): Promise<IExecuteResponse>` - Execute a prepared statement with parameters
+- `prepareAndExecuteWithParameters(sql: string, parameters?: any[], firstFrameMaxSize?: number): Promise<IExecuteResponse>` - Prepare and execute a statement with parameters in one call
 
 ## Todo
 
 - [ ] static build of protobuf for web use
-- [ ] prepared statements for business use cases
+- [X] prepared statements for business use cases
 - [ ] packaging; release artifacts
 - [ ] CI/CD actions
-- [ ] testing
-- [ ] Implement more business object helpers for primary documented use cases
+- [X] testing
+- [X] Implement more business object helpers for primary documented use cases
 
 
 ## License
