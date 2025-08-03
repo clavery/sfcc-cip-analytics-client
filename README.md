@@ -6,10 +6,6 @@ See [https://developer.salesforce.com/docs/commerce/b2c-commerce/guide/jdbc_intr
 
 ![Screenshot of CLI output](https://raw.githubusercontent.com/clavery/sfcc-cip-analytics-client/refs/heads/main/assets/screenshot.png)
 
-> [!IMPORTANT]  
-> Many queries may not work and return an SQL error. This is a work in progress to discover the proper queries applied the CIP schemas.
-
-
 ## Installation
 
 > [!IMPORTANT]  
