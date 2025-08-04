@@ -4,7 +4,7 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
-    "cip-query": "dist/cli.js"
+    "cip-query": "cli.js"
   },
   "exports": {
     ".": {
@@ -73,6 +73,7 @@
     "url": "https://github.com/clavery/sfcc-cip-analytics-client.git"
   },
   "files": [
+    "cli.js",
     "dist/**/*",
     "proto/**/*",
     "README.md"

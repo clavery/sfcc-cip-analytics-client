@@ -556,7 +556,7 @@ async function executeQueryCommand(args: string[]): Promise<void> {
   }
 }
 
-async function main(): Promise<void> {
+export async function main(): Promise<void> {
   try {
     const args = process.argv.slice(2);
     

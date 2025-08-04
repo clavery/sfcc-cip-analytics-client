@@ -1,5 +1,7 @@
 import * as $protobuf from "protobufjs";
-import Long = require("long");
+import Long from 'long';
+// @ts-ignore
+import {CursorFactory,MetaDataOperationArgument} from './protocol-impl' 
 /** Properties of a ConnectionProperties. */
 export interface IConnectionProperties {
 
