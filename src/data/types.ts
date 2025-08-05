@@ -16,12 +16,10 @@ export function formatDateForSQL(date: Date): string {
 }
 
 /**
- * Clean SQL string by removing extra whitespace and newlines for database compatibility
+ * We don't really need to clean anything at the moment
  * @param sql The SQL string to clean
  * @returns Cleaned SQL string with normalized whitespace
  */
 export function cleanSQL(sql: string): string {
-  return sql
-    .replace(/\s+/g, ' ')  // Replace multiple whitespace/newlines with single space
-    .trim();               // Remove leading/trailing whitespace
+  return sql;
 }

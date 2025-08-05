@@ -185,10 +185,7 @@ async function readStdin(): Promise<string> {
     });
     
     process.stdin.on('end', () => {
-      // Replace newlines with spaces and trim leading/trailing whitespace
-      // This preserves the SQL structure while making it a single line
-      const normalizedSQL = data.replace(/\s+/g, ' ').trim();
-      resolve(normalizedSQL);
+      resolve(data);
     });
     
     process.stdin.on('error', reject);
