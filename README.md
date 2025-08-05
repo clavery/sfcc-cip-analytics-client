@@ -40,9 +40,11 @@ npm install -g sfcc-cip-analytics-client
 
 ## CLI Usage
 
-### Environment Variables
+### Configuration
 
-Set the following environment variables. Your Account Manager API client must have the `SALESFORCE_COMMERCE_API:[instance]` role and tenant filter.
+The CLI can be configured using environment variables or command-line options. Your Account Manager API client must have the `SALESFORCE_COMMERCE_API:[instance]` role and tenant filter.
+
+#### Environment Variables
 
 ```bash
 export SFCC_CLIENT_ID="your-client-id"
@@ -51,6 +53,17 @@ export SFCC_CIP_INSTANCE="your-instance-name" # example abcd_prd
 
 # Optional: Enable debug logging
 export SFCC_DEBUG=true
+```
+
+#### Command-line Options
+
+You can also provide credentials directly via CLI options (these override environment variables):
+
+```bash
+cip-query sql --client-id "your-client-id" \
+              --client-secret "your-client-secret" \
+              --instance "your-instance-name" \
+              "SELECT * FROM ccdw_aggr_ocapi_request LIMIT 10"
 ```
 
 ### Commands

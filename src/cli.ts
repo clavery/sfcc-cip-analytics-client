@@ -237,16 +237,20 @@ Query Command:
 
 Global Options:
   --help             Show this help message
+  --client-id        SFCC client ID (overrides SFCC_CLIENT_ID env var)
+  --client-secret    SFCC client secret (overrides SFCC_CLIENT_SECRET env var)
+  --instance         SFCC CIP instance (overrides SFCC_CIP_INSTANCE env var)
 
 Environment Variables:
-  SFCC_CLIENT_ID     Your SFCC client ID (required)
-  SFCC_CLIENT_SECRET Your SFCC client secret (required)
-  SFCC_CIP_INSTANCE  Your SFCC CIP instance (required)
+  SFCC_CLIENT_ID     Your SFCC client ID (required unless --client-id is provided)
+  SFCC_CLIENT_SECRET Your SFCC client secret (required unless --client-secret is provided)
+  SFCC_CIP_INSTANCE  Your SFCC CIP instance (required unless --instance is provided)
   SFCC_DEBUG         Enable debug logging (optional)
 
 Examples:
-  # Execute arbitrary SQL
-  cip-query sql "SELECT * FROM ccdw_aggr_ocapi_request LIMIT 10"
+  # Execute arbitrary SQL with CLI options
+  cip-query sql --client-id my-id --client-secret my-secret --instance my-instance \\
+    "SELECT * FROM ccdw_aggr_ocapi_request LIMIT 10"
   
   # Execute SQL with date placeholders
   cip-query sql --format json --from "2024-01-01" --to "2024-01-02" <<SQL
@@ -310,6 +314,9 @@ async function executeSqlCommand(args: string[]): Promise<void> {
       from: { type: 'string' },
       to: { type: 'string' },
       format: { type: 'string', default: 'table' },
+      'client-id': { type: 'string' },
+      'client-secret': { type: 'string' },
+      instance: { type: 'string' },
       help: { type: 'boolean', short: 'h' }
     },
     allowPositionals: true
@@ -365,13 +372,14 @@ async function executeSqlCommand(args: string[]): Promise<void> {
   const finalSQL = replacePlaceholders(sql, fromDate, toDate);
   console.info(`Executing SQL: ${finalSQL}`);
 
-  // Get environment variables
-  const clientId = process.env.SFCC_CLIENT_ID;
-  const clientSecret = process.env.SFCC_CLIENT_SECRET;
-  const instance = process.env.SFCC_CIP_INSTANCE;
+  // Get credentials from CLI options or environment variables
+  const clientId = values['client-id'] || process.env.SFCC_CLIENT_ID;
+  const clientSecret = values['client-secret'] || process.env.SFCC_CLIENT_SECRET;
+  const instance = values.instance || process.env.SFCC_CIP_INSTANCE;
 
   if (!clientId || !clientSecret || !instance) {
-    console.error('Error: Required environment variables: SFCC_CLIENT_ID, SFCC_CLIENT_SECRET, SFCC_CIP_INSTANCE');
+    console.error('Error: Required credentials not provided.');
+    console.error('Provide via CLI options (--client-id, --client-secret, --instance) or environment variables (SFCC_CLIENT_ID, SFCC_CLIENT_SECRET, SFCC_CIP_INSTANCE)');
     process.exit(1);
   }
 
@@ -449,6 +457,9 @@ async function executeQueryCommand(args: string[]): Promise<void> {
       from: { type: 'string' },
       to: { type: 'string' },
       format: { type: 'string', default: 'table' },
+      'client-id': { type: 'string' },
+      'client-secret': { type: 'string' },
+      instance: { type: 'string' },
       help: { type: 'boolean', short: 'h' }
     },
     allowPositionals: false
@@ -510,13 +521,14 @@ async function executeQueryCommand(args: string[]): Promise<void> {
     process.exit(1);
   }
 
-  // Get environment variables
-  const clientId = process.env.SFCC_CLIENT_ID;
-  const clientSecret = process.env.SFCC_CLIENT_SECRET;
-  const instance = process.env.SFCC_CIP_INSTANCE;
+  // Get credentials from CLI options or environment variables
+  const clientId = values['client-id'] || process.env.SFCC_CLIENT_ID;
+  const clientSecret = values['client-secret'] || process.env.SFCC_CLIENT_SECRET;
+  const instance = values.instance || process.env.SFCC_CIP_INSTANCE;
 
   if (!clientId || !clientSecret || !instance) {
-    console.error('Error: Required environment variables: SFCC_CLIENT_ID, SFCC_CLIENT_SECRET, SFCC_CIP_INSTANCE');
+    console.error('Error: Required credentials not provided.');
+    console.error('Provide via CLI options (--client-id, --client-secret, --instance) or environment variables (SFCC_CLIENT_ID, SFCC_CLIENT_SECRET, SFCC_CIP_INSTANCE)');
     process.exit(1);
   }
 
