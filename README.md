@@ -118,7 +118,7 @@ cip-query sql --format csv < my-analytics-query.sql
 ### Low Level Client
 
 ```typescript
-import { CIPClient, executeParameterizedQuery } from 'sfcc-cip-analytics-client';
+import { CIPClient } from 'sfcc-cip-analytics-client';
 
 const client = new CIPClient(
   process.env.SFCC_CLIENT_ID!,
@@ -152,13 +152,13 @@ queryData();
 ### Type-Centric Parameterized Queries
 
 ```typescript
-  import { CIPClient, executeParameterizedQuery } from 'sfcc-cip-analytics-client';
-  interface OCAPISummary {
-    request_date: string;
-    site_id: string;
-    api_resource: string;
-    num_requests: number;
-  }
+import { CIPClient, executeParameterizedQuery } from 'sfcc-cip-analytics-client';
+interface OCAPISummary {
+  request_date: string;
+  site_id: string;
+  api_resource: string;
+  num_requests: number;
+}
   
 async function queryData() {
   try {
