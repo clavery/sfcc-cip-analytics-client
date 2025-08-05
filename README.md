@@ -179,9 +179,9 @@ try {
   for await (const batch of query) {
     console.log(`Processed ${batch.length} ocapi requests`);
     for (const record of batch) {
+      // Each record is typed as OCAPISummary
       console.log(record.api_resource);
     }
-    // Each record has: request_date,site_id,api_resource, requests
   }
 } finally {
   await client.closeConnection();
