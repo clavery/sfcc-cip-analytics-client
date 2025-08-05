@@ -1,6 +1,6 @@
 {
   "name": "sfcc-cip-analytics-client",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
@@ -49,12 +49,13 @@
     }
   },
   "scripts": {
-    "preinstall": "npm run build",
     "build": "tsc --project tsconfig.build.json",
     "lint": "tsc --noEmit --project tsconfig.json",
     "clean": "rm -rf dist",
     "prepublishOnly": "npm run clean && npm run build",
-    "test": "npm run lint",
+    "test": "npm run lint && jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
     "test:integration": "npx tsx tests/integration/simple-integration-test.ts"
   },
   "author": "Charles Lavery <clavery@salesforce.com>",
@@ -79,9 +80,12 @@
     "README.md"
   ],
   "devDependencies": {
+    "@types/jest": "^30.0.0",
     "@types/node": "^24.1.0",
     "@types/uuid": "^10.0.0",
+    "jest": "^30.0.5",
     "protobufjs-cli": "^1.1.3",
+    "ts-jest": "^29.4.1",
     "tsx": "^4.19.1",
     "typescript": "^5.9.2"
   },
