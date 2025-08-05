@@ -8,29 +8,11 @@ See [https://developer.salesforce.com/docs/commerce/b2c-commerce/guide/jdbc_intr
 
 ## Installation
 
-> [!IMPORTANT]  
-> This is currently NOT published to npm at the package below. Instead install it manually by cloning the repo or release artifacts and using file: urls
-> ```
-> git clone ...
-> cd my-project
-> npm install ../sfcc-cip-analytics-client
-> ```
-
-
 ```bash
 npm install sfcc-cip-analytics-client
 ```
 
 ### Global CLI Installation
-
-> [!IMPORTANT]  
-> This is currently NOT published to npm at the package below. Instead install it manually by cloning the repo or release artifacts and installing with npm install
-> ```
-> git clone ...
-> cd sfcc-cip-analytics-client
-> npm install -g .
-> cip-query --help
-> ```
 
 
 ```bash
