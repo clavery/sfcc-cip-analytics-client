@@ -4,7 +4,7 @@ import { parseArgs } from 'util';
 import { CIPClient } from './cip-client';
 import { processFrame } from './utils';
 import { NormalizedFrame } from './normalized-types';
-import { formatDateForSQL } from './data/types';
+import { cleanSQL, formatDateForSQL } from './data/types';
 import { queryCustomerRegistrationTrends } from './data/aggregate/customer_registration_analytics';
 import { queryTopSellingProducts, queryProductCoPurchaseAnalysis } from './data/aggregate/product_analytics';
 import { queryPromotionDiscountAnalysis } from './data/aggregate/promotion_analytics';
@@ -342,6 +342,7 @@ async function executeSqlCommand(args: string[]): Promise<void> {
   } else {
     sql = positionals.join(' ');
   }
+  sql = cleanSQL(sql);
   const format = values.format as string;
   
   if (!['table', 'json', 'csv'].includes(format)) {

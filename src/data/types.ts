@@ -16,10 +16,12 @@ export function formatDateForSQL(date: Date): string {
 }
 
 /**
- * We don't really need to clean anything at the moment
+ * Apache calcite does not seem to like trailing semicolons in SQL queries
  * @param sql The SQL string to clean
  * @returns Cleaned SQL string with normalized whitespace
  */
 export function cleanSQL(sql: string): string {
+  // Remove trailing semicolons, matching across multiple lines
+  sql = sql.replace(/;\s*$/, '');
   return sql;
 }
