@@ -118,7 +118,7 @@ cip-query sql --format csv < my-analytics-query.sql
 ### Low Level Client
 
 ```typescript
-import { CIPClient } from 'sfcc-cip-analytics-client';
+import { CIPClient, executeParameterizedQuery } from 'sfcc-cip-analytics-client';
 
 const client = new CIPClient(
   process.env.SFCC_CLIENT_ID!,
@@ -127,6 +127,7 @@ const client = new CIPClient(
 );
 
 async function queryData() {
+  // direct statement execution
   try {
     await client.openConnection();
     const statementId = await client.createStatement();
@@ -148,7 +149,47 @@ async function queryData() {
 queryData();
 ```
 
-### Business Use Case Queries
+### Type-Centric Parameterized Queries
+
+```typescript
+  import { CIPClient, executeParameterizedQuery } from 'sfcc-cip-analytics-client';
+  interface OCAPISummary {
+    request_date: string;
+    site_id: string;
+    api_resource: string;
+    num_requests: number;
+  }
+  
+async function queryData() {
+  try {
+    await client.openConnection();
+    
+    const query = executeParameterizedQuery<OCAPISummary>(
+      client,
+      `SELECT request_date,site_id,api_resource,SUM(num_requests) as requests FROM
+        ccdw_aggr_ocapi_request
+      WHERE
+        request_date >= '2024-01-01'
+      AND request_date <= '2024-01-31'
+      GROUP BY request_date,site_id,api_resource`,
+      [],
+      100 // batch size
+    );
+    
+    for await (const batch of query) {
+      console.log(`Processed ${batch.length} ocapi requests`);
+      // Each record has: request_date,site_id,api_resource, requests
+    }
+  } finally {
+    await client.closeConnection();
+  }
+  
+}
+
+queryData();
+```
+
+### High Level Business Use Case Queries
 
 The client provides specialized query functions for common business analytics use cases. These return simple arrays of plain old JavaScript objects, making it easy to work with the data.
 
@@ -237,11 +278,6 @@ new CIPClient(clientId: string, clientSecret: string, instance: string, options?
 ## Todo
 
 - [ ] static build of protobuf for web use
-- [X] prepared statements for business use cases
-- [ ] packaging; release artifacts
-- [ ] CI/CD actions
-- [X] testing
-- [X] Implement more business object helpers for primary documented use cases
 
 
 ## License
