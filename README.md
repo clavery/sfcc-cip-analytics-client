@@ -279,6 +279,7 @@ new CIPClient(clientId: string, clientSecret: string, instance: string, options?
 
 ## Todo
 
+- [ ] support proxy / fetch replacement (for browser use and advanced proxy scenarios)
 - [ ] static build of protobuf for web use
 
 
