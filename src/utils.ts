@@ -63,8 +63,10 @@ export function decodeValue(columnValue: any, columnMetadata?: IColumnMetaData):
       case Rep.PRIMITIVE_FLOAT:
       case Rep.DOUBLE:
       case Rep.PRIMITIVE_DOUBLE:
-      case Rep.BIG_DECIMAL:
         return typedValue.doubleValue;
+      case Rep.BIG_DECIMAL:
+        // process from string
+        return parseFloat(typedValue.stringValue);
       case Rep.BYTE_STRING:
         return typedValue.bytesValue;
       case Rep.ARRAY:
