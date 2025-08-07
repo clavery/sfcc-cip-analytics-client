@@ -1,10 +1,14 @@
 #!/usr/bin/env node
 
+import * as dotenv from 'dotenv';
+dotenv.config({quiet:true});
+
 import { parseArgs } from 'util';
 import { CIPClient } from './cip-client';
 import { processFrame } from './utils';
 import { NormalizedFrame } from './normalized-types';
 import { cleanSQL, formatDateForSQL } from './data/types';
+import { readFileSync } from 'fs';
 import { queryCustomerRegistrationTrends } from './data/aggregate/customer_registration_analytics';
 import { queryTopSellingProducts, queryProductCoPurchaseAnalysis } from './data/aggregate/product_analytics';
 import { queryPromotionDiscountAnalysis } from './data/aggregate/promotion_analytics';
@@ -205,10 +209,12 @@ Commands:
 
 SQL Command:
   cip-query sql [options] <sql>
+  cip-query sql [options] --file <file.sql>
   cip-query sql [options] < file.sql
   echo "SELECT * FROM table" | cip-query sql [options]
 
   Options:
+    --file <path>    Read SQL from file (strips shebang if present)
     --from <date>    From date for <FROM> placeholder
     --to <date>      To date for <TO> placeholder
     --format <type>  Output format: table (default), json, csv
@@ -243,6 +249,8 @@ Environment Variables:
   SFCC_CLIENT_SECRET Your SFCC client secret (required unless --client-secret is provided)
   SFCC_CIP_INSTANCE  Your SFCC CIP instance (required unless --instance is provided)
   SFCC_DEBUG         Enable debug logging (optional)
+
+  Note: Environment variables can be set in a .env file in the current directory
 
 Examples:
   # Execute arbitrary SQL with CLI options
@@ -311,6 +319,7 @@ async function executeSqlCommand(args: string[]): Promise<void> {
       from: { type: 'string' },
       to: { type: 'string' },
       format: { type: 'string', default: 'table' },
+      file: { type: 'string' },
       'client-id': { type: 'string' },
       'client-secret': { type: 'string' },
       instance: { type: 'string' },
@@ -324,21 +333,43 @@ async function executeSqlCommand(args: string[]): Promise<void> {
     return;
   }
 
-  // Get SQL from positional args or stdin
+  // Get SQL from file, positional args, or stdin
   let sql: string;
-  if (positionals.length === 0) {
+  if (values.file) {
+    // Read from file
+    try {
+      let fileContent = readFileSync(values.file, 'utf-8');
+      // Strip shebang line if present
+      if (fileContent.startsWith('#!')) {
+        const lines = fileContent.split('\n');
+        lines.shift(); // Remove the first line (shebang)
+        fileContent = lines.join('\n');
+      }
+      sql = fileContent;
+    } catch (error) {
+      console.error(`Error reading file "${values.file}": ${error instanceof Error ? error.message : String(error)}`);
+      process.exit(1);
+    }
+  } else if (positionals.length === 0) {
     // Check if stdin has data
     if (process.stdin.isTTY) {
-      console.error('Error: SQL query is required (provide as argument or via stdin)');
+      console.error('Error: SQL query is required (provide as argument, --file, or via stdin)');
       showHelp();
       process.exit(1);
     }
     // Read from stdin
-    sql = await readStdin();
-    if (!sql.trim()) {
+    let stdinContent = await readStdin();
+    if (!stdinContent.trim()) {
       console.error('Error: No SQL query provided via stdin');
       process.exit(1);
     }
+    // Strip shebang line if present
+    if (stdinContent.startsWith('#!')) {
+      const lines = stdinContent.split('\n');
+      lines.shift(); // Remove the first line (shebang)
+      stdinContent = lines.join('\n');
+    }
+    sql = stdinContent;
   } else {
     sql = positionals.join(' ');
   }
