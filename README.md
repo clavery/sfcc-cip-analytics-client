@@ -6,6 +6,41 @@ See [https://developer.salesforce.com/docs/commerce/b2c-commerce/guide/jdbc_intr
 
 ![Screenshot of CLI output](https://raw.githubusercontent.com/clavery/sfcc-cip-analytics-client/refs/heads/main/docs/screenshot.png)
 
+
+<!--toc:start-->
+- [SFCC Commerce Intelligence Platform Analytics Client](#sfcc-commerce-intelligence-platform-analytics-client)
+  - [Installation](#installation)
+    - [Global CLI Installation](#global-cli-installation)
+  - [CLI Usage](#cli-usage)
+    - [Configuration](#configuration)
+      - [Environment Variables](#environment-variables)
+      - [Command-line Options](#command-line-options)
+    - [Commands](#commands)
+      - [`sql` - Execute custom SQL queries](#sql-execute-custom-sql-queries)
+      - [`query` - Execute predefined business object queries](#query-execute-predefined-business-object-queries)
+    - [Basic Query](#basic-query)
+    - [With Date Placeholders](#with-date-placeholders)
+    - [Different Output Formats](#different-output-formats)
+    - [Using Heredocs (Multi-line SQL)](#using-heredocs-multi-line-sql)
+    - [From Files](#from-files)
+  - [API Usage](#api-usage)
+    - [Low Level Client](#low-level-client)
+    - [Type-Centric Parameterized Queries](#type-centric-parameterized-queries)
+    - [High Level Business Use Case Queries](#high-level-business-use-case-queries)
+  - [Examples](#examples)
+  - [Development Setup](#development-setup)
+    - [Prerequisites](#prerequisites)
+    - [Getting Started](#getting-started)
+  - [API Documentation](#api-documentation)
+    - [CIPClient](#cipclient)
+      - [Constructor](#constructor)
+      - [Methods](#methods)
+  - [Todo](#todo)
+  - [License](#license)
+    - [Support](#support)
+<!--toc:end-->
+
+
 ## Installation
 
 ```bash
@@ -21,6 +56,8 @@ npm install -g sfcc-cip-analytics-client
 ```
 
 ## CLI Usage
+
+![Screenshot of CLI ](https://raw.githubusercontent.com/clavery/sfcc-cip-analytics-client/refs/heads/main/docs/cli.png)
 
 ### Configuration
 
