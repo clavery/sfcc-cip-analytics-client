@@ -78,7 +78,7 @@ queryTopSellingProducts.QUERY = (
       pss.registered,
       s.nsite_id
     FROM ccdw_aggr_product_sales_summary pss
-    JOIN ccdw_dim_product p ON p.product_id = pss.product_id
+    JOIN ccdw_dim_product p ON p.sku_id = pss.sku_id
     JOIN ccdw_dim_site s ON s.site_id = pss.site_id
     WHERE pss.submit_date >= '${startDate}' AND pss.submit_date <= '${endDate}'
       AND s.nsite_id = '${params.siteId}'
