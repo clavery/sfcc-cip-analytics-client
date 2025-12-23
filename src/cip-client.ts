@@ -23,8 +23,32 @@ interface TokenInfo {
   expiresAt: number; // Unix timestamp
 }
 
+export interface FetchResponse {
+  ok: boolean;
+  status: number;
+  statusText: string;
+  json(): Promise<any>;
+  text(): Promise<string>;
+  arrayBuffer(): Promise<ArrayBuffer>;
+  headers: {
+    get(name: string): string | null;
+  };
+}
+
+export interface FetchRequestInit {
+  method?: string;
+  headers?: Record<string, string | undefined>;
+  body?: any;
+}
+
+export type FetchFunction = (
+  url: string,
+  init?: FetchRequestInit,
+) => Promise<FetchResponse>;
+
 export interface CIPClientOptions {
   logger?: Logger;
+  fetch?: FetchFunction;
 }
 
 export class CIPClient {
@@ -33,6 +57,7 @@ export class CIPClient {
   private readonly instance: string;
   private readonly serverUrl: string;
   private readonly logger: Logger;
+  private readonly fetchFn: FetchFunction;
   private root: protobuf.Root | null = null;
   private connectionId: string | null = null;
   private tokenInfo: TokenInfo | null = null;
@@ -49,6 +74,7 @@ export class CIPClient {
     this.instance = instance;
     this.serverUrl = `https://jdbc.analytics.commercecloud.salesforce.com/${instance}`;
     this.logger = options.logger || defaultLogger;
+    this.fetchFn = options.fetch || fetch;
   }
 
   /**
@@ -78,7 +104,7 @@ export class CIPClient {
 
       const tokenUrl = `https://account.demandware.com/dwsso/oauth2/access_token?scope=SALESFORCE_COMMERCE_API:${this.instance}`;
 
-      const response = await fetch(tokenUrl, {
+      const response = await this.fetchFn(tokenUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/x-www-form-urlencoded",
@@ -383,7 +409,7 @@ export class CIPClient {
       serializedLength: serializedWireMessage.length,
     });
     // 4. Send the request using fetch.
-    const httpResponse = await fetch(this.serverUrl, {
+    const httpResponse = await this.fetchFn(this.serverUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/x-protobuf",
