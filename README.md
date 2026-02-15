@@ -1,5 +1,11 @@
 # SFCC Commerce Intelligence Platform Analytics Client
 
+> [!WARNING]
+> This repository is **deprecated**. Official support is now available in the B2C CLI.
+> Use the Salesforce B2C Developer Tooling docs instead:
+> - [B2C Developer Tooling](https://salesforcecommercecloud.github.io/b2c-developer-tooling/)
+> - [Analytics Reports (CIP/CCAC) Guide](https://salesforcecommercecloud.github.io/b2c-developer-tooling/guide/analytics-reports-cip-ccac.html)
+
 A TypeScript/Node.js client library and CLI tool for querying Salesforce Commerce Cloud (SFCC) Commerce Intelligence Platform (CIP) analytics data through the use of the JDBC protocol. This client abstracts the underlying Avatica protobuf protocol and provides both programmatic and command-line interfaces for accessing your commerce analytics data.
 
 See [https://developer.salesforce.com/docs/commerce/b2c-commerce/guide/jdbc_intro.html](https://developer.salesforce.com/docs/commerce/b2c-commerce/guide/jdbc_intro.html) for the details of the JDBC driver used with Java applications as well as the business object and schema reference.
