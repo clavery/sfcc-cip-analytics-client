@@ -1,7 +1,7 @@
 
-export { CIPClient, CIPClientOptions } from './cip-client';
+export { CIPClient, CIPClientOptions, FetchFunction, FetchRequestInit, FetchResponse } from './cip-client';
 export { Logger, DefaultLogger, NoOpLogger, defaultLogger } from './logger';
-export { getAuthConfig, getAccessToken, getAvaticaServerUrl, AuthConfig } from './auth';
+export { getAuthConfig, getAccessToken, getAvaticaServerUrl, AuthConfig, GetAccessTokenOptions } from './auth';
 export { decodeValue, processFrame } from './utils';
 export { IConnectionProperties, IWireMessage, IPrepareResponse, IExecuteResponse, IStatementHandle, ITypedValue, Rep } from './protocol';
 export { 

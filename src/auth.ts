@@ -1,7 +1,29 @@
+export interface FetchResponse {
+  ok: boolean;
+  status: number;
+  statusText: string;
+  json(): Promise<any>;
+}
+
+export interface FetchRequestInit {
+  method?: string;
+  headers?: Record<string, string | undefined>;
+  body?: any;
+}
+
+export type FetchFunction = (
+  url: string,
+  init?: FetchRequestInit,
+) => Promise<FetchResponse>;
+
 export interface AuthConfig {
   clientId: string;
   clientSecret: string;
   instance: string;
+}
+
+export interface GetAccessTokenOptions {
+  fetch?: FetchFunction;
 }
 
 export function getAuthConfig(): AuthConfig {
@@ -26,12 +48,13 @@ export function getAuthConfig(): AuthConfig {
   };
 }
 
-export async function getAccessToken(): Promise<string> {
+export async function getAccessToken(options: GetAccessTokenOptions = {}): Promise<string> {
   const config = getAuthConfig();
-  
+  const fetchFn = options.fetch || fetch;
+
   const tokenUrl = `https://account.demandware.com/dwsso/oauth2/access_token?scope=SALESFORCE_COMMERCE_API:${config.instance}`;
-  
-  const response = await fetch(tokenUrl, {
+
+  const response = await fetchFn(tokenUrl, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
